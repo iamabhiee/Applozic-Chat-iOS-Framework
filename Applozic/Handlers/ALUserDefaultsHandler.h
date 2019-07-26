@@ -61,7 +61,7 @@
 #define AL_USER_ROLE_TYPE @"com.applozic.userdefault.AL_USER_ROLE_TYPE"
 #define AL_USER_PUSH_NOTIFICATION_FORMATE @"com.applozic.userdefault.AL_USER_PUSH_NOTIFICATION_FORMATE"
 #define USER_MQTT_ENCRYPTION_KEY @"com.applozic.userdefault.USER_MQTT_ENCRYPTION_KEY"
-
+ #define GROUP_APP_ID @"group.io.nineapp.ios"
 #import <Foundation/Foundation.h>
 #import "ALApplozicSettings.h"
 

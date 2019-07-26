@@ -589,12 +589,17 @@
 }
 
 -(void) syncReceivedMessage :(ALMessage *)alMessage withNSMutableDictionary:(NSMutableDictionary*)nsMutableDictionary{
+//    [self.alSyncCallService syncCall:alMessage];// added By Mahipal
+//    [self.mqttConversationDelegate syncCall:alMessage andMessageList:nil]; commented By mahipal
 
     ALPushAssist* assistant = [[ALPushAssist alloc] init];
 
     [ALMessageService getLatestMessageForUser:[ALUserDefaultsHandler getDeviceKeyString] withDelegate:self.realTimeUpdate withCompletion:^(NSMutableArray *message, NSError *error) {
 
         ALSLog(ALLoggerSeverityInfo, @"ALMQTTConversationService SYNC CALL");
+        [self.alSyncCallService syncCall:alMessage];// added By Mahipal
+         [self.mqttConversationDelegate syncCall:alMessage andMessageList:nil]; 
+        /*COde commented BY MAHIPAL
         if(!assistant.isOurViewOnTop)
         {
             [assistant assist:alMessage.contactIds and:nsMutableDictionary ofUser:alMessage.contactIds];
@@ -604,7 +609,7 @@
         {
             [self.alSyncCallService syncCall:alMessage];
             [self.mqttConversationDelegate syncCall:alMessage andMessageList:nil];
-        }
+        }*/
 
     }];
 }

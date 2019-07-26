@@ -49,7 +49,8 @@
 
     self.pairedMessageKey = [super getStringFromJsonValue:messageJson[@"pairedMessageKey"]];
 
-
+self.totalUnreadCount = [super getNSNumberFromJsonValue:messageJson[@"totalUnreadCount"]]; //ADDED BY MAHIPAL
+    
     // device keyString
 
     self.deviceKey = [self getStringFromJsonValue:messageJson[@"deviceKey"]];

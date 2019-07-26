@@ -219,7 +219,8 @@
 {
     
     NSString * theUrlString = [NSString stringWithFormat:@"%@%@", KBASE_URL, REMOVE_MEMBER_FROM_CHANNEL_URL];
-    NSString * theParamString = [NSString stringWithFormat:@"groupId=%@&userId=%@", channelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
+//    NSString * theParamString = [NSString stringWithFormat:@"groupId=%@&userId=%@", channelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
+    NSString * theParamString = [NSString stringWithFormat:@"groupId=%@&userId=%@&resetCount=true", channelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
     if(clientChannelKey)
     {
         theParamString = [NSString stringWithFormat:@"clientGroupId=%@&userId=%@",clientChannelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
@@ -273,7 +274,8 @@
       andCompletion:(void (^)(NSError *, ALAPIResponse *))completion
 {
     NSString * theUrlString = [NSString stringWithFormat:@"%@%@", KBASE_URL, LEFT_CHANNEL_URL];
-    NSString * theParamString = [NSString stringWithFormat:@"groupId=%@&userId=%@",channelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
+//    NSString * theParamString = [NSString stringWithFormat:@"groupId=%@&userId=%@",channelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
+    NSString * theParamString = [NSString stringWithFormat:@"groupId=%@&userId=%@&resetCount=true",channelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
     if(clientChannelKey)
     {
         theParamString = [NSString stringWithFormat:@"clientGroupId=%@&userId=%@",clientChannelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];

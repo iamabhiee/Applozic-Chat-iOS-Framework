@@ -36,8 +36,13 @@
 {
     NSString *type = (NSString *)[dictionary valueForKey:@"AL_KEY"];
     ALSLog(ALLoggerSeverityInfo, @"APNs GOT NEW MESSAGE & NOTIFICATION TYPE :: %@", type);
+//     NSLog(@"APNs GOT NEW MESSAGE & NOTIFICATION TYPE :: %@", type);
     BOOL prefixCheck = ([type hasPrefix:APPLOZIC_PREFIX]) || ([type hasPrefix:@"MT_"]);
-    return (type != nil && ([ALPushNotificationService.ApplozicNotificationTypes containsObject:type] || prefixCheck));
+//    NSLog(@"prefixCheck %d", prefixCheck);
+    BOOL status = (type != nil && ([ALPushNotificationService.ApplozicNotificationTypes containsObject:type] || prefixCheck));
+    
+//    NSLog(@"prefixCheck status %d", status);
+    return status;
 }
 
 -(BOOL) processPushNotification:(NSDictionary *)dictionary updateUI:(NSNumber *)updateUI
@@ -45,7 +50,8 @@
 
     ALSLog(ALLoggerSeverityInfo, @"APNS_DICTIONARY :: %@",dictionary.description);
     ALSLog(ALLoggerSeverityInfo, @"UPDATE UI VALUE :: %@",updateUI);
-    ALSLog(ALLoggerSeverityInfo, @"UPDATE UI :: %@", ([updateUI isEqualToNumber:[NSNumber numberWithInt:1]]) ? @"ACTIVE" : @"BACKGROUND/INACTIVE");
+    ALSLog(ALLoggerSeverityInfo, @"UPDATE UI AB:: %@", ([updateUI isEqualToNumber:[NSNumber numberWithInt:1]]) ? @"ACTIVE" : @"BACKGROUND/INACTIVE");
+    NSLog(@"UPDATE UI CD:: %@", ([updateUI isEqualToNumber:[NSNumber numberWithInt:1]]) ? @"ACTIVE" : @"BACKGROUND/INACTIVE");
 
     if ([self isApplozicNotification:dictionary])
     {
@@ -103,11 +109,15 @@
 
         if ([type isEqualToString:MT_SYNC]) // APPLOZIC_01 //
         {
+            
             [ALUserDefaultsHandler setMsgSyncRequired:YES];
+             NSLog(@"NEW MESSAGE -MAHIPAL %@",self.realTimeUpdate);
             [ALMessageService getLatestMessageForUser:[ALUserDefaultsHandler getDeviceKeyString] withDelegate:self.realTimeUpdate
                                        withCompletion:^(NSMutableArray *message, NSError *error) {
+                                           NSLog(@"NEW Array message-MAHIPAL %@",message);
+                                           
                                        }];
-
+                      NSLog(@"ALPushNotificationService's SYNC CALL");
              ALSLog(ALLoggerSeverityInfo, @"ALPushNotificationService's SYNC CALL");
             [dict setObject:(alertValue ? alertValue : @"") forKey:@"alertValue"];
 

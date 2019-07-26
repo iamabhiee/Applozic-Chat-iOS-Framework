@@ -423,18 +423,17 @@
     }];
 }
 
-
 -(void)deleteMessageThread:( NSString * ) contactId orChannelKey:(NSNumber *)channelKey withCompletion:(void (^)(NSString *, NSError *))completion
 {
     NSString * theUrlString = [NSString stringWithFormat:@"%@/rest/ws/message/delete/conversation",KBASE_URL];
     NSString * theParamString;
     if(channelKey != nil)
     {
-        theParamString = [NSString stringWithFormat:@"groupId=%@",channelKey];
+        theParamString = [NSString stringWithFormat:@"groupId=%@&resetCount=true",channelKey];
     }
     else
     {
-        theParamString = [NSString stringWithFormat:@"userId=%@",[contactId urlEncodeUsingNSUTF8StringEncoding]];
+        theParamString = [NSString stringWithFormat:@"userId=%@&resetCount=true",[contactId urlEncodeUsingNSUTF8StringEncoding]];
     }
     NSMutableURLRequest * theRequest = [ALRequestHandler createGETRequestWithUrlString:theUrlString paramString:theParamString];
     
@@ -445,11 +444,37 @@
             ALMessageDBService * dbService = [[ALMessageDBService alloc] init];
             [dbService deleteAllMessagesByContact:contactId orChannelKey:channelKey];
         }
-        ALSLog(ALLoggerSeverityInfo, @"Response DELETE_MESSAGE_THREAD: %@", (NSString *)theJson);
-        ALSLog(ALLoggerSeverityError, @"ERROR DELETE_MESSAGE_THREAD: %@", theError.description);
         completion((NSString *)theJson,theError);
     }];
 }
+
+//Commented By Applozic
+//-(void)deleteMessageThread:( NSString * ) contactId orChannelKey:(NSNumber *)channelKey withCompletion:(void (^)(NSString *, NSError *))completion
+//{
+//    NSString * theUrlString = [NSString stringWithFormat:@"%@/rest/ws/message/delete/conversation",KBASE_URL];
+//    NSString * theParamString;
+//    if(channelKey != nil)
+//    {
+//        theParamString = [NSString stringWithFormat:@"groupId=%@",channelKey];
+//    }
+//    else
+//    {
+//        theParamString = [NSString stringWithFormat:@"userId=%@",[contactId urlEncodeUsingNSUTF8StringEncoding]];
+//    }
+//    NSMutableURLRequest * theRequest = [ALRequestHandler createGETRequestWithUrlString:theUrlString paramString:theParamString];
+//
+//    [ALResponseHandler processRequest:theRequest andTag:@"DELETE_MESSAGE_THREAD" WithCompletionHandler:^(id theJson, NSError *theError) {
+//
+//        if (!theError)
+//        {
+//            ALMessageDBService * dbService = [[ALMessageDBService alloc] init];
+//            [dbService deleteAllMessagesByContact:contactId orChannelKey:channelKey];
+//        }
+//        ALSLog(ALLoggerSeverityInfo, @"Response DELETE_MESSAGE_THREAD: %@", (NSString *)theJson);
+//        ALSLog(ALLoggerSeverityError, @"ERROR DELETE_MESSAGE_THREAD: %@", theError.description);
+//        completion((NSString *)theJson,theError);
+//    }];
+//}
 
 -(void)sendMessage: (NSDictionary *) userInfo WithCompletionHandler:(void(^)(id theJson, NSError *theError))completion
 {
