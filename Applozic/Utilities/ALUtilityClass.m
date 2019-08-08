@@ -218,7 +218,7 @@
 
 
 
-+(void)thirdDisplayNotificationTS:(NSString *)toastMessage andForContactId:(NSString *)contactId withGroupId:(NSNumber*) groupID delegate:(id)delegate
++(void)thirdDisplayNotificationTS:(NSString *)toastMessage andForContactId:(NSString *)contactId withGroupId:(NSNumber*) groupID withConversationId:(NSNumber *)conversationId delegate:(id)delegate
 {
     
     if([ALUserDefaultsHandler getNotificationMode] == NOTIFICATION_DISABLE ){
@@ -260,7 +260,7 @@
                                        callback:^(void){
         
                                            
-                                           [delegate thirdPartyNotificationTap1:contactId withGroupId:groupID];
+                                           [delegate thirdPartyNotificationTap1:contactId withGroupId:groupID withConversationId: conversationId];
 
         
     }buttonTitle:nil buttonCallback:nil atPosition:TSMessageNotificationPositionTop canBeDismissedByUser:YES];
@@ -432,22 +432,29 @@
 
 +(void)showAlertMessage:(NSString *)text andTitle:(NSString *)title
 {
-    UIAlertView * alertView = [[UIAlertView alloc] initWithTitle:title
-                                                         message:text
-                                                        delegate:self
-                                               cancelButtonTitle:nil
-                                               otherButtonTitles:NSLocalizedStringWithDefaultValue(@"okText", [ALApplozicSettings getLocalizableName], [NSBundle mainBundle], @"OK" , @""), nil];
-    
-    [alertView show];
-    
+
+    UIAlertController * uiAlertController = [UIAlertController
+                                 alertControllerWithTitle:title
+                                 message:text
+                                 preferredStyle:UIAlertControllerStyleAlert];
+
+    UIAlertAction* okButton = [UIAlertAction
+                                actionWithTitle:NSLocalizedStringWithDefaultValue(@"okText", [ALApplozicSettings getLocalizableName], [NSBundle mainBundle], @"OK" , @"")
+                                style:UIAlertActionStyleDefault
+                                handler:^(UIAlertAction * action) {
+
+                                }];
+
+    [uiAlertController addAction:okButton];
+    ALPushAssist *pushAssist = [[ALPushAssist alloc]init];
+    [pushAssist.topViewController.navigationController presentViewController:uiAlertController animated:NO completion:nil];
+
+
 }
 
 +(UIView *)setStatusBarStyle
 {
     UIApplication * app = [UIApplication sharedApplication];
-    [app setStatusBarHidden:NO];
-    [app setStatusBarStyle:[ALApplozicSettings getStatusBarStyle]];
-    
     CGFloat height = app.statusBarFrame.size.height;
     CGFloat width = app.statusBarFrame.size.width;
     UIView *statusBarView = [[UIView alloc] initWithFrame:CGRectMake(0, -height, width, height)];
@@ -651,6 +658,40 @@
     return coordinate;
 }
 
++(NSString *)getFileExtensionWithFileName:(NSString *)fileName{
+    NSArray *componentsArray = [fileName componentsSeparatedByString:@"."];
+    return componentsArray.count  > 0 ? [componentsArray lastObject]:nil;
+}
 
++(NSURL *)getDocumentDirectory{
+
+    return  [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject];
+}
+
++(NSURL *)getAppsGroupDirectory{
+
+    NSURL * urlForDocumentsDirectory;
+    NSString * shareExtentionGroupName =  [ALApplozicSettings getShareExtentionGroup];
+    if(shareExtentionGroupName){
+        urlForDocumentsDirectory =  [[NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier:shareExtentionGroupName];
+    }
+    return urlForDocumentsDirectory;
+}
+
++(NSURL *)getApplicationDirectoryWithFilePath:(NSString*) path {
+
+    NSURL * directory  =   [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject];
+    directory = [directory URLByAppendingPathComponent:path];
+    return directory;
+}
+
++(NSURL *)getAppsGroupDirectoryWithFilePath:(NSString*) path {
+
+    NSURL * urlForDocumentsDirectory = self. getAppsGroupDirectory;
+    if(urlForDocumentsDirectory){
+        urlForDocumentsDirectory = [urlForDocumentsDirectory URLByAppendingPathComponent:path];
+    }
+    return urlForDocumentsDirectory;
+}
 
 @end

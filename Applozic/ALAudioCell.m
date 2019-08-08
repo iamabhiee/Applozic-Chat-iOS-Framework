@@ -157,7 +157,7 @@
     [self.mUserProfileImageView setUserInteractionEnabled:YES];
     [self.mUserProfileImageView addGestureRecognizer:tapForOpenChat];
     
-    if([alMessage.type isEqualToString:@MT_INBOX_CONSTANT])
+    if([alMessage isReceivedMessage])
     {
         self.mBubleImageView.backgroundColor = [ALApplozicSettings getReceiveMsgColor];
         
@@ -184,7 +184,7 @@
         {
             [self.mUserProfileImageView sd_setImageWithURL:[NSURL URLWithString:@""] placeholderImage:nil options:SDWebImageRefreshCached];
             [self.mNameLabel setHidden:NO];
-            self.mUserProfileImageView.backgroundColor = [ALColorUtility getColorForAlphabet:alMessage.to];
+            self.mUserProfileImageView.backgroundColor = [ALColorUtility getColorForAlphabet:alMessage.to colorCodes:self.alphabetiColorCodesDictionary];
         }
          CGFloat requiredHeight  = BUBBLE_PADDING_HEIGHT;
         CGFloat paypauseBUttonY = self.mBubleImageView.frame.origin.y + BUTTON_PADDING_Y ;
@@ -198,7 +198,7 @@
         {
          
             [self.mChannelMemberName setHidden:NO];
-            [self.mChannelMemberName setTextColor: [ALColorUtility getColorForAlphabet:receiverName]];
+            [self.mChannelMemberName setTextColor: [ALColorUtility getColorForAlphabet:receiverName colorCodes:self.alphabetiColorCodesDictionary]];
             [self.mChannelMemberName setText:receiverName];
    
             self.mChannelMemberName.frame = CGRectMake(self.mBubleImageView.frame.origin.x + CHANNEL_PADDING_X,
@@ -247,6 +247,7 @@
         
         if (alMessage.imageFilePath == nil)
         {
+            self.mDowloadRetryButton.alpha = 1;
             [self.mDowloadRetryButton setHidden:NO];
             [self.mDowloadRetryButton setImage:[ALUtilityClass getImageFromFramworkBundle:@"DownloadiOS.png"] forState:UIControlStateNormal];
         }
@@ -354,9 +355,20 @@
     
     if(alMessage.imageFilePath != nil && alMessage.fileMeta.blobKey)
     {
-        NSString * docDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
-        NSString * filePath = [docDir stringByAppendingPathComponent:alMessage.imageFilePath];
-        NSURL * soundFileURL = [NSURL fileURLWithPath:filePath];
+        NSURL * soundFileURL;
+        NSURL *documentDirectory =  [ALUtilityClass getApplicationDirectoryWithFilePath:alMessage.imageFilePath];
+        NSString *filePath = documentDirectory.path;
+
+        if([[NSFileManager defaultManager] fileExistsAtPath:filePath]){
+            soundFileURL = [NSURL fileURLWithPath:documentDirectory.path];
+        }else{
+            NSURL *appGroupDirectory =  [ALUtilityClass getAppsGroupDirectoryWithFilePath:alMessage.imageFilePath];
+
+            if(appGroupDirectory){
+                soundFileURL = [NSURL fileURLWithPath:appGroupDirectory.path];
+            }
+        }
+
         ALSLog(ALLoggerSeverityInfo, @"SOUND_URL :: %@",[soundFileURL path]);
         [self.playPauseStop setHidden:NO];
     }
@@ -371,7 +383,7 @@
     
     self.mDateLabel.text = theDate;
     
-    if ([alMessage.type isEqualToString:@MT_OUTBOX_CONSTANT]) {
+    if ([alMessage isSentMessage]  && ((self.channel && self.channel.type != OPEN) || self.contact)) {
         
         self.mMessageStatusImageView.hidden = NO;
         NSString * imageName;
@@ -407,25 +419,24 @@
 #pragma mark - Menu option tap Method -
 
 -(void) proccessTapForMenu:(id)tap{
-    
     [self processKeyBoardHideTap];
 
     UIMenuItem * messageForward = [[UIMenuItem alloc] initWithTitle:NSLocalizedStringWithDefaultValue(@"forwardOptionTitle", [ALApplozicSettings getLocalizableName],[NSBundle mainBundle], @"Forward", @"") action:@selector(messageForward:)];
     UIMenuItem * messageReply = [[UIMenuItem alloc] initWithTitle:NSLocalizedStringWithDefaultValue(@"replyOptionTitle", [ALApplozicSettings getLocalizableName],[NSBundle mainBundle], @"Reply", @"") action:@selector(messageReply:)];
-    
+
     if ([self.mMessage.type isEqualToString:@MT_INBOX_CONSTANT]){
-        
+
         [[UIMenuController sharedMenuController] setMenuItems: @[messageForward,messageReply]];
-        
+
     }else if ([self.mMessage.type isEqualToString:@MT_OUTBOX_CONSTANT]){
 
-        
+
         UIMenuItem * msgInfo = [[UIMenuItem alloc] initWithTitle:NSLocalizedStringWithDefaultValue(@"infoOptionTitle", [ALApplozicSettings getLocalizableName],[NSBundle mainBundle], @"Info", @"") action:@selector(msgInfo:)];
-        
+
         [[UIMenuController sharedMenuController] setMenuItems: @[msgInfo,messageReply,messageForward]];
     }
     [[UIMenuController sharedMenuController] update];
-    
+
 }
 
 
@@ -442,7 +453,7 @@
 
     }
         
-    if([self.mMessage.type isEqualToString:@MT_OUTBOX_CONSTANT] && self.mMessage.groupId){
+    if([self.mMessage isSentMessage] && self.mMessage.groupId){
         
         return (self.mMessage.isDownloadRequired? (action == @selector(delete:) || action == @selector(msgInfo:)):(action == @selector(delete:)|| action == @selector(msgInfo:)|| [self isForwardMenuEnabled:action] || [self isMessageReplyMenuEnabled:action] ));
     }

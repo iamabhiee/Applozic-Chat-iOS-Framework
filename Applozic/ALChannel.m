@@ -60,6 +60,13 @@
         [userArray addObject:channelUser];
     }
     self.groupUsers = userArray;
+    
+    // Channel conversation status
+    if (self.metadata) {
+        self.category = [ALChannel getConversationCategory:self.metadata];
+    } else {
+        self.category = ALL_CONVERSATION;
+    }
 }
 
 -(NSNumber *)getChannelMemberParentKey:(NSString *)userId
@@ -173,6 +180,19 @@
         return ([ [_metadata  valueForKey:AL_CONTEXT_BASED_CHAT] isEqualToString:@"true"]);
     }
     return NO;
+}
+
++ (CONVERSATION_CATEGORY)getConversationCategory:(NSDictionary *)metadata
+{
+    NSString *status = [metadata objectForKey:CHANNEL_CONVERSATION_STATUS];
+    NSString *assignee = [metadata valueForKey:CONVERSATION_ASSIGNEE];
+
+    if (status != nil && ([status isEqualToString:@"2"] || [status isEqualToString:@"3"])) {
+        return CLOSED_CONVERSATION;
+    } else if (assignee != nil && ([assignee isEqualToString:[ALUserDefaultsHandler getUserId]])) {
+        return ASSIGNED_CONVERSATION;
+    }
+    return ALL_CONVERSATION;
 }
 
 @end

@@ -10,7 +10,7 @@
 #import "ALJson.h"
 #import "ALFileMetaInfo.h"
 #import "ALApplozicSettings.h"
-#import "ALMessgaeBuilder.h"
+#import "ALMessageBuilder.h"
 #import "ALConstant.h"
 
 #define ALMESSAGE_CONTENT_DEFAULT 0
@@ -134,12 +134,15 @@ typedef enum {
 
 -(BOOL)isLocationMessage;
 -(BOOL)isContactMessage;
+-(BOOL)isChannelContentTypeMessage;
 -(BOOL)isDocumentMessage;
 -(BOOL)isSilentNotification;
 
 @property (nonatomic,assign) BOOL deleted;
 @property (nonatomic, assign) BOOL msgHidden;
-- (instancetype)initWithBuilder:(ALMessgaeBuilder *)builder ;
-+ (instancetype)build:(void (^)(ALMessgaeBuilder *))builder ;
+- (instancetype)initWithBuilder:(ALMessageBuilder *)builder ;
++ (instancetype)build:(void (^)(ALMessageBuilder *))builder ;
+-(BOOL)isNotificationDisabled;
+-(BOOL)isLinkMessage;
 
 @end

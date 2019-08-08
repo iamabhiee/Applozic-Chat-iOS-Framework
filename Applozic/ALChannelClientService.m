@@ -60,7 +60,7 @@
     NSString * theParamString = [NSString stringWithFormat:@"groupId=%@", channelKey];
     if(clientChannelKey)
     {
-        theParamString = [NSString stringWithFormat:@"clientGroupId=%@", clientChannelKey];
+        theParamString = [NSString stringWithFormat:@"clientGroupId=%@", [clientChannelKey urlEncodeUsingNSUTF8StringEncoding]];
     }
     NSMutableURLRequest * theRequest = [ALRequestHandler createGETRequestWithUrlString:theUrlString paramString:theParamString];
     
@@ -194,7 +194,7 @@
     NSString * theParamString = [NSString stringWithFormat:@"groupId=%@&userId=%@",channelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
     if(clientChannelKey)
     {
-        theParamString = [NSString stringWithFormat:@"clientGroupId=%@&userId=%@",clientChannelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
+        theParamString = [NSString stringWithFormat:@"clientGroupId=%@&userId=%@",[clientChannelKey urlEncodeUsingNSUTF8StringEncoding],[userId urlEncodeUsingNSUTF8StringEncoding]];
     }
     
     NSMutableURLRequest * theRequest = [ALRequestHandler createGETRequestWithUrlString:theUrlString paramString:theParamString];
@@ -223,7 +223,7 @@
     NSString * theParamString = [NSString stringWithFormat:@"groupId=%@&userId=%@&resetCount=true", channelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
     if(clientChannelKey)
     {
-        theParamString = [NSString stringWithFormat:@"clientGroupId=%@&userId=%@",clientChannelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
+        theParamString = [NSString stringWithFormat:@"clientGroupId=%@&userId=%@",[clientChannelKey urlEncodeUsingNSUTF8StringEncoding],[userId urlEncodeUsingNSUTF8StringEncoding]];
     }
     NSMutableURLRequest * theRequest = [ALRequestHandler createGETRequestWithUrlString:theUrlString paramString:theParamString];
     
@@ -250,7 +250,7 @@
     NSString * theParamString = [NSString stringWithFormat:@"groupId=%@", channelKey];
     if(clientChannelKey)
     {
-        theParamString = [NSString stringWithFormat:@"clientGroupId=%@",clientChannelKey];
+        theParamString = [NSString stringWithFormat:@"clientGroupId=%@",[clientChannelKey urlEncodeUsingNSUTF8StringEncoding]];
     }
     NSMutableURLRequest * theRequest = [ALRequestHandler createGETRequestWithUrlString:theUrlString paramString:theParamString];
     
@@ -278,7 +278,7 @@
     NSString * theParamString = [NSString stringWithFormat:@"groupId=%@&userId=%@&resetCount=true",channelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
     if(clientChannelKey)
     {
-        theParamString = [NSString stringWithFormat:@"clientGroupId=%@&userId=%@",clientChannelKey,[userId urlEncodeUsingNSUTF8StringEncoding]];
+        theParamString = [NSString stringWithFormat:@"clientGroupId=%@&userId=%@",[clientChannelKey urlEncodeUsingNSUTF8StringEncoding],[userId urlEncodeUsingNSUTF8StringEncoding]];
     }
     NSMutableURLRequest * theRequest = [ALRequestHandler createGETRequestWithUrlString:theUrlString paramString:theParamString];
     
@@ -340,8 +340,13 @@
           andNewName:(NSString *)newName andImageURL:(NSString *)imageURL metadata:(NSMutableDictionary *)metaData
          orChildKeys:(NSMutableArray *)childKeysList  orChannelUsers:(NSMutableArray *)channelUsers  andCompletion:(void(^)(NSError *error, ALAPIResponse *response))completion
 {
-    NSString * theUrlString = [NSString stringWithFormat:@"%@%@", KBASE_URL, UPDATE_CHANNEL_URL];
-    
+    NSString * theUrlString;
+    if(imageURL && [imageURL isEqualToString:@""]){
+     theUrlString =   [NSString stringWithFormat:@"%@%@?resetGroupImageUrl=true", KBASE_URL, UPDATE_CHANNEL_URL];
+    }else{
+        theUrlString =  [NSString stringWithFormat:@"%@%@", KBASE_URL, UPDATE_CHANNEL_URL];
+    }
+
     NSMutableDictionary *dictionary = [NSMutableDictionary new];
     
     if(newName.length)

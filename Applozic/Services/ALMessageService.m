@@ -13,7 +13,6 @@
 #import "ALMessageDBService.h"
 #import "ALMessageList.h"
 #import "ALDBHandler.h"
-#import "ALConnection.h"
 #import "ALConnectionQueueHandler.h"
 #import "ALUserDefaultsHandler.h"
 #import "ALMessageClientService.h"
@@ -29,12 +28,35 @@
 #import "ALApplozicSettings.h"
 #import <objc/runtime.h>
 #import "ALMQTTConversationService.h"
+#import "ApplozicClient.h"
+#import "ALHTTPManager.h"
+#import "ALUploadTask.h"
+
+
+@interface ALMessageService  ()<ApplozicAttachmentDelegate>
+
+@end
 
 @implementation ALMessageService
 
 static ALMessageClientService *alMsgClientService;
 
++(ALMessageService *)sharedInstance
+{
+    static ALMessageService *sharedInstance = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        sharedInstance = [[ALMessageService alloc] init];
+    });
+    return sharedInstance;
+}
+
 +(void) processLatestMessagesGroupByContact
+{
+    [ALMessageService processLatestMessagesGroupByContactWithCompletion:nil];
+}
+
++(void) processLatestMessagesGroupByContactWithCompletion:(void(^)(void))completion
 {
     ALMessageClientService * almessageClientService = [[ALMessageClientService alloc] init];
     [almessageClientService getLatestMessageGroupByContact:[ALUserDefaultsHandler getFetchConversationPageSize] startTime:[ALUserDefaultsHandler getLastMessageListTime]  withCompletion:^( ALMessageList *alMessageListResponse,NSError *error) {
@@ -52,37 +74,40 @@ static ALMessageClientService *alMsgClientService;
 
             [[NSNotificationCenter defaultCenter] postNotificationName:CONVERSATION_CALL_COMPLETED object:nil userInfo:nil];
 
-            if(alMessageListResponse.messageList.count){
-
-                 for(ALMessage *message in [alMessageListResponse.messageList subarrayWithRange:NSMakeRange(0, MIN(6, alMessageListResponse.messageList.count))] ){
-
-                    if(message.groupId != nil && message.groupId != 0){
-
-                        MessageListRequest * messageListRequest = [[MessageListRequest alloc] init];
-                        messageListRequest.userId = nil;
-                        messageListRequest.channelKey = message.groupId;
-                        messageListRequest.skipRead = YES;
-
-                        [self getMessageListForUser:messageListRequest withCompletion:^(NSMutableArray *messages, NSError *error, NSMutableArray *userDetailArray) {
-
-                        }];
-                    }else{
-
-                        MessageListRequest * messageListRequest = [[MessageListRequest alloc] init];
-                        messageListRequest.userId = message.contactIds;
-                        messageListRequest.channelKey = nil;
-                        messageListRequest.skipRead = YES;
-
-                        [self getMessageListForUser:messageListRequest withCompletion:^(NSMutableArray *messages, NSError *error, NSMutableArray *userDetailArray) {
-
-                        }];
-
-                    }
-                }
-            }
+//            if(alMessageListResponse.messageList.count){
+//
+//                 for(ALMessage *message in [alMessageListResponse.messageList subarrayWithRange:NSMakeRange(0, MIN(6, alMessageListResponse.messageList.count))] ){
+//
+//                    if(message.groupId != nil && message.groupId != 0){
+//
+//                        MessageListRequest * messageListRequest = [[MessageListRequest alloc] init];
+//                        messageListRequest.userId = nil;
+//                        messageListRequest.channelKey = message.groupId;
+//                        messageListRequest.skipRead = YES;
+//
+//                        [[ALMessageService sharedInstance] getMessageListForUser:messageListRequest withCompletion:^(NSMutableArray *messages, NSError *error, NSMutableArray *userDetailArray) {
+//
+//                        }];
+//                    }else{
+//
+//                        MessageListRequest * messageListRequest = [[MessageListRequest alloc] init];
+//                        messageListRequest.userId = message.contactIds;
+//                        messageListRequest.channelKey = nil;
+//                        messageListRequest.skipRead = YES;
+//
+//                        [[ALMessageService sharedInstance] getMessageListForUser:messageListRequest withCompletion:^(NSMutableArray *messages, NSError *error, NSMutableArray *userDetailArray) {
+//
+//                        }];
+//
+//                    }
+//                }
+//            }
         }
         else{
             ALSLog(ALLoggerSeverityInfo, @"Message List Response Nil");
+        }
+        if (completion) {
+            completion();
         }
     }];
 }
@@ -125,7 +150,7 @@ static ALMessageClientService *alMsgClientService;
         messageListRequest.endTimeStamp = time;
         messageListRequest.conversationId = alMessage.conversationId;
 
-        [self getMessageListForUser:messageListRequest withCompletion:^(NSMutableArray *messages, NSError *error, NSMutableArray *userDetailArray) {
+        [[ALMessageService sharedInstance] getMessageListForUser:messageListRequest withCompletion:^(NSMutableArray *messages, NSError *error, NSMutableArray *userDetailArray) {
 
             completion (messages,error,userDetailArray);
         }];
@@ -135,11 +160,11 @@ static ALMessageClientService *alMsgClientService;
 
 }
 
-+(void)getMessageListForUser:(MessageListRequest *)messageListRequest withCompletion:(void (^)(NSMutableArray *, NSError *, NSMutableArray *))completion
+-(void)getMessageListForUser:(MessageListRequest *)messageListRequest withCompletion:(void (^)(NSMutableArray *, NSError *, NSMutableArray *))completion
 {
     //On Message List Cell Tap
     ALMessageDBService *almessageDBService =  [[ALMessageDBService alloc] init];
-    NSMutableArray * messageList = [almessageDBService getMessageListForContactWithCreatedAt:messageListRequest.userId withCreatedAt:messageListRequest.endTimeStamp andChannelKey:messageListRequest.channelKey conversationId:messageListRequest.conversationId];
+    NSMutableArray * messageList = [almessageDBService getMessageListForContactWithCreatedAt:messageListRequest];
 
     //Found Record in DB itself ...if not make call to server
     if(messageList.count > 0 && ![ALUserDefaultsHandler isServerCallDoneForMSGList:messageListRequest.userId])
@@ -174,28 +199,19 @@ static ALMessageClientService *alMsgClientService;
                    withCompletion:^(NSMutableArray *messages,
                                     NSError *error,
                                     NSMutableArray *userDetailArray) {
-
                        [alContactDBService addUserDetails:userDetailArray];
 
                        ALContactService *contactService = [ALContactService new];
                        NSMutableArray * userNotPresentIds = [NSMutableArray new];
 
-                       NSMutableArray  *messageArray = messages;
-                       NSMutableArray * hiddenMsgFilteredArray = [[NSMutableArray alloc] initWithArray:messageArray];
-
-                       for(ALMessage* msg  in hiddenMsgFilteredArray){
-
-                           if([msg isHiddenMessage] && ![msg isVOIPNotificationMessage])
-                           {
-                               [messageArray removeObject:msg];
+                       for (int i = messages.count - 1; i >= 0; i--) {
+                           ALMessage * message = messages[i];
+                           if ([message isHiddenMessage] && ![message isVOIPNotificationMessage]) {
+                               [messages removeObjectAtIndex:i];
                            }
-
-                           NSString* contactId = msg.to;
-
-                           if(![contactService isContactExist:contactId]){
-                               [userNotPresentIds addObject:contactId];
+                           if (![contactService isContactExist:message.to]) {
+                               [userNotPresentIds addObject:message.to];
                            }
-
                        }
 
                        if(userNotPresentIds.count>0)
@@ -261,7 +277,7 @@ static ALMessageClientService *alMsgClientService;
 }
 
 
-+(void) sendMessages:(ALMessage *)alMessage withCompletion:(void(^)(NSString * message, NSError * error)) completion {
+-(void) sendMessages:(ALMessage *)alMessage withCompletion:(void(^)(NSString * message, NSError * error)) completion {
 
     //DB insert if objectID is null
     DB_Message* dbMessage;
@@ -332,6 +348,10 @@ static ALMessageClientService *alMsgClientService;
 
             }
 
+            if(self.delegate){
+                [self.delegate onMessageSent:alMessage];
+            }
+
         }else{
             ALSLog(ALLoggerSeverityError, @" got error while sending messages");
         }
@@ -340,65 +360,7 @@ static ALMessageClientService *alMsgClientService;
 
 }
 
-
-+(void) sendMessage:(ALMessage *)alMessage
-withAttachmentAtLocation:(NSString *)attachmentLocalPath
-     andContentType:(short)contentype
-     withCompletion:(void(^)(NSString * message, NSError * error)) completion {
-
-    //Message Creation
-    ALMessage * theMessage = alMessage;
-    theMessage.contentType = contentype;
-    theMessage.imageFilePath = attachmentLocalPath.lastPathComponent;
-
-    //File Meta Creation
-    theMessage.fileMeta.name = [NSString stringWithFormat:@"AUD-5-%@", attachmentLocalPath.lastPathComponent];
-    if(alMessage.contactIds){
-        theMessage.fileMeta.name = [NSString stringWithFormat:@"%@-5-%@",alMessage.contactIds, attachmentLocalPath.lastPathComponent];
-    }
-
-    CFStringRef pathExtension = (__bridge_retained CFStringRef)[attachmentLocalPath pathExtension];
-    CFStringRef type = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, pathExtension, NULL);
-    CFRelease(pathExtension);
-    NSString *mimeType = (__bridge_transfer NSString *)UTTypeCopyPreferredTagWithClass(type, kUTTagClassMIMEType);
-
-    theMessage.fileMeta.contentType = mimeType;
-    if( theMessage.contentType == ALMESSAGE_CONTENT_VCARD){
-        theMessage.fileMeta.contentType = @"text/x-vcard";
-    }
-    NSData *imageSize = [NSData dataWithContentsOfFile:attachmentLocalPath];
-    theMessage.fileMeta.size = [NSString stringWithFormat:@"%lu",(unsigned long)imageSize.length];
-
-    //DB Addition
-    ALDBHandler * theDBHandler = [ALDBHandler sharedInstance];
-    ALMessageDBService* messageDBService = [[ALMessageDBService alloc] init];
-    DB_Message * theMessageEntity = [messageDBService createMessageEntityForDBInsertionWithMessage:theMessage];
-    [theDBHandler.managedObjectContext save:nil];
-    theMessage.msgDBObjectId = [theMessageEntity objectID];
-    theMessageEntity.inProgress = [NSNumber numberWithBool:YES];
-    theMessageEntity.isUploadFailed = [NSNumber numberWithBool:NO];
-    [[ALDBHandler sharedInstance].managedObjectContext save:nil];
-
-    NSDictionary * userInfo = [alMessage dictionary];
-
-    ALMessageClientService * clientService  = [[ALMessageClientService alloc]init];
-    [clientService sendPhotoForUserInfo:userInfo withCompletion:^(NSString *message, NSError *error) {
-
-        if (error)
-        {
-            ALSLog(ALLoggerSeverityError, @" <<<ERROR>>> SEND PHOTO FOR USER%@",error);
-             completion (message,error);
-            return;
-        }
-        [self proessUploadImageForMessage:theMessage databaseObj:theMessageEntity.fileMetaInfo uploadURL:message  withdelegate:self];
-
-        completion (message,error);
-
-    }];
-
-}
-
-+(void) getLatestMessageForUser:(NSString *)deviceKeyString withDelegate : (id<ApplozicUpdatesDelegate>)theDelegate withCompletion:(void (^)( NSMutableArray *, NSError *))completion
++(void) getLatestMessageForUser:(NSString *)deviceKeyString withDelegate : (id<ApplozicUpdatesDelegate>)delegate withCompletion:(void (^)( NSMutableArray *, NSError *))completion
 {
     if(!alMsgClientService)
     {
@@ -422,53 +384,50 @@ withAttachmentAtLocation:(NSString *)attachmentLocalPath
                     ALMessageDBService * dbService = [[ALMessageDBService alloc] init];
                     messageArray = [dbService addMessageList:syncResponse.messagesList];
 
-                    NSMutableArray * hiddenMsgFilteredArray = [[NSMutableArray alloc] initWithArray:messageArray];
-                    for(ALMessage * message in hiddenMsgFilteredArray)
-                    {
-                        if([message isHiddenMessage] && ![message isVOIPNotificationMessage])
-                        {
-                            [messageArray removeObject:message];
-                        }
-                       else if(![message isToIgnoreUnreadCountIncrement])
-                        {
-                            [ALMessageService incrementContactUnreadCount:message];
-                        }
-
-                        if (message.groupId != nil && message.contentType == ALMESSAGE_CHANNEL_NOTIFICATION) {
-                            ALChannelService *channelService = [[ALChannelService alloc] init];
-                            [channelService syncCallForChannel];
-                            if([message isMsgHidden]) {
-                                [messageArray removeObject:message];
-                            }
-                        }
-
-                        if(![message isHiddenMessage] && ![message isVOIPNotificationMessage] && theDelegate)
-                        {
-                            if([message.type  isEqual: OUT_BOX]){
-                                [theDelegate onMessageSent: message];
-                            }else{
-                                [theDelegate onMessageReceived: message];
-                            }
-                        }
-
-                    }
-
                     [ALUserService processContactFromMessages:messageArray withCompletion:^{
+
+                        for (int i = messageArray.count - 1; i>=0; i--) {
+                            ALMessage * message = messageArray[i];
+                            if([message isHiddenMessage] && ![message isVOIPNotificationMessage])
+                            {
+                                [messageArray removeObjectAtIndex:i];
+                            }
+                            else if(![message isToIgnoreUnreadCountIncrement])
+                            {
+                                [ALMessageService incrementContactUnreadCount:message];
+                            }
+
+                            if (message.groupId != nil && message.contentType == ALMESSAGE_CHANNEL_NOTIFICATION) {
+                                if ([message.metadata[@"action"] isEqual: @"4"]) {
+                                    [[NSNotificationCenter defaultCenter]
+                                     postNotificationName:@"CONVERSATION_DELETION"
+                                     object:message.groupId];
+                                }
+                                [[ALChannelService sharedInstance] syncCallForChannelWithDelegate:delegate];
+                            }
+
+                            if(![message isHiddenMessage] && ![message isVOIPNotificationMessage] && delegate)
+                            {
+                                if([message.type  isEqual: OUT_BOX]){
+                                    [delegate onMessageSent: message];
+                                }else{
+                                    [delegate onMessageReceived: message];
+                                }
+                            }
+                        }
+
                         [[NSNotificationCenter defaultCenter] postNotificationName:NEW_MESSAGE_NOTIFICATION object:messageArray userInfo:nil];
+
+                        [ALUserDefaultsHandler setLastSyncTime:syncResponse.lastSyncTime];
+
+                        completion(messageArray,error);
 
                     }];
 
-                    completion(messageArray,error);
-
-                }else
-                {
+                }else{
+                    [ALUserDefaultsHandler setLastSyncTime:syncResponse.lastSyncTime];
                     completion(messageArray,error);
                 }
-
-                [ALUserDefaultsHandler setLastSyncTime:syncResponse.lastSyncTime];
-                ALMessageClientService *messageClientService = [[ALMessageClientService alloc] init];
-                [messageClientService updateDeliveryReports:syncResponse.messagesList];
-
             }
             else
             {
@@ -512,7 +471,9 @@ withAttachmentAtLocation:(NSString *)attachmentLocalPath
     }
 
     if(message.conversationId){
-        [self fetchTopicDetails:message.conversationId];
+        ALConversationService * alConversationService = [[ALConversationService alloc] init];
+        [alConversationService fetchTopicDetails:message.conversationId withCompletion:^(NSError *error, ALConversationProxy *proxy) {
+        }];
     }
 
     return YES;
@@ -524,7 +485,8 @@ withAttachmentAtLocation:(NSString *)attachmentLocalPath
        || (message.groupId && message.contentType == ALMESSAGE_CHANNEL_NOTIFICATION)
        || [message.type isEqualToString:@"5"]
        || [message isHiddenMessage]
-       || [message isVOIPNotificationMessage]) {
+       || [message isVOIPNotificationMessage]
+       || [message.status isEqualToNumber:[NSNumber numberWithInt:READ]]) {
 
         return NO;
 
@@ -532,14 +494,7 @@ withAttachmentAtLocation:(NSString *)attachmentLocalPath
         return YES;
     }
 }
-+(void)fetchTopicDetails :(NSNumber *)conversationId
-{
-    if(conversationId)
-    {
-        ALConversationService * alConversationService = [[ALConversationService alloc] init];
-        [alConversationService fetchTopicDetails:conversationId];
-    }
-}
+
 
 +(void) updateDeliveredReport: (NSArray *) deliveredMessageKeys withStatus:(int)status
 {
@@ -625,99 +580,6 @@ withAttachmentAtLocation:(NSString *)attachmentLocalPath
          }];
 }
 
-+(void) proessUploadImageForMessage:(ALMessage *)message databaseObj:(DB_FileMetaInfo *)fileMetaInfo uploadURL:(NSString *)uploadURL withdelegate:(id)delegate{
-
-
-    NSString * docDirPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
-    NSString * timestamp = message.imageFilePath;
-    NSString * filePath = [docDirPath stringByAppendingPathComponent:timestamp];
-    ALSLog(ALLoggerSeverityInfo, @"FILE_PATH : %@",filePath);
-    NSMutableURLRequest * request = [ALRequestHandler createPOSTRequestWithUrlString:uploadURL paramString:nil];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
-        //Create boundary, it can be anything
-        NSString *boundary = @"------ApplogicBoundary4QuqLuM1cE5lMwCy";
-        // set Content-Type in HTTP header
-        NSString *contentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@", boundary];
-        [request setValue:contentType forHTTPHeaderField: @"Content-Type"];
-        // post body
-        NSMutableData *body = [NSMutableData data];
-        //Populate a dictionary with all the regular values you would like to send.
-        NSMutableDictionary *parameters = [[NSMutableDictionary alloc] init];
-        // add params (all params are strings)
-        for (NSString *param in parameters) {
-            [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-            [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"%@\"\r\n\r\n", param] dataUsingEncoding:NSUTF8StringEncoding]];
-            [body appendData:[[NSString stringWithFormat:@"%@\r\n", [parameters objectForKey:param]] dataUsingEncoding:NSUTF8StringEncoding]];
-        }
-
-        NSString* FileParamConstant;
-        if(ALApplozicSettings.isS3StorageServiceEnabled){
-            FileParamConstant = @"file";
-        }else{
-            FileParamConstant = @"files[]";
-        }
-        NSData *imageData = [[NSData alloc]initWithContentsOfFile:filePath];
-        ALSLog(ALLoggerSeverityInfo, @"Attachment data length: %f",imageData.length/1024.0);
-        //Assuming data is not nil we add this to the multipart form
-        if (imageData)
-        {
-            [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-            [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"%@\"; filename=\"%@\"\r\n", FileParamConstant,message.fileMeta.name] dataUsingEncoding:NSUTF8StringEncoding]];
-
-            [body appendData:[[NSString stringWithFormat:@"Content-Type:%@\r\n\r\n", message.fileMeta.contentType] dataUsingEncoding:NSUTF8StringEncoding]];
-            [body appendData:imageData];
-            [body appendData:[[NSString stringWithFormat:@"\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-        }
-        //Close off the request with the boundary
-        [body appendData:[[NSString stringWithFormat:@"--%@--\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-        // setting the body of the post to the request
-        [request setHTTPBody:body];
-        // set URL
-        [request setURL:[NSURL URLWithString:uploadURL]];
-        NSMutableArray * theCurrentConnectionsArray = [[ALConnectionQueueHandler sharedConnectionQueueHandler] getCurrentConnectionQueue];
-        NSArray * theFiletredArray = [theCurrentConnectionsArray filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"keystring == %@", message.key]];
-
-        if( theFiletredArray.count>0 ){
-            ALSLog(ALLoggerSeverityInfo, @"upload is already running .....not starting new one ....");
-            return;
-        }
-        ALConnection * connection = [[ALConnection alloc] initWithRequest:request delegate:delegate startImmediately:YES];
-        connection.keystring = message.key;
-        connection.connectionType = @"Image Posting";
-        [[[ALConnectionQueueHandler sharedConnectionQueueHandler] getCurrentConnectionQueue] addObject:connection];
-        ALSLog(ALLoggerSeverityInfo, @"CONNECTION_BEFORE_MQTT : %@",connection.mData);
-    }
-    else{
-        ALSLog(ALLoggerSeverityError, @"<<< ERROR >>> :: FILE DO NOT EXIT AT GIVEN PATH");
-    }
-
-}
-
-+(void) processImageDownloadforMessage:(ALMessage *) message withdelegate:(id)delegate
-{
-    ALMessageClientService * messageClientService = [[ALMessageClientService alloc]init];
-    [messageClientService downloadImageUrl:message.fileMeta.blobKey withCompletion:^(NSString *fileURL, NSError *error) {
-        if(error)
-        {
-            ALSLog(ALLoggerSeverityError, @"ERROR GETTING DOWNLOAD URL : %@", error);
-            return;
-        }
-        ALSLog(ALLoggerSeverityInfo, @"ATTACHMENT DOWNLOAD URL : %@", fileURL);
-
-        NSMutableURLRequest * theRequest;
-        if(ALApplozicSettings.isS3StorageServiceEnabled) {
-            theRequest = [ALRequestHandler createGETRequestWithUrlStringWithoutHeader:fileURL paramString:nil];
-        }else{
-            theRequest = [ALRequestHandler createGETRequestWithUrlString: fileURL paramString:nil];
-        }
-
-        ALConnection * connection = [[ALConnection alloc] initWithRequest:theRequest delegate:delegate startImmediately:YES];
-        connection.keystring = message.key;
-        connection.connectionType = @"Image Downloading";
-        [[[ALConnectionQueueHandler sharedConnectionQueueHandler] getCurrentConnectionQueue] addObject:connection];
-    }];
-}
-
 +(ALMessage*) processFileUploadSucess: (ALMessage *) message{
 
     ALMessageDBService * dbService = [[ALMessageDBService alloc] init];
@@ -732,11 +594,13 @@ withAttachmentAtLocation:(NSString *)attachmentLocalPath
     dbMessage.fileMetaInfo.size = message.fileMeta.size;
     dbMessage.fileMetaInfo.suUserKeyString = message.fileMeta.userKey;
     message.fileMetaKey = message.fileMeta.key;
+    message.msgDBObjectId = [dbMessage objectID];
+
     [[ALDBHandler sharedInstance].managedObjectContext save:nil];
     return message;
 }
 
-+(void)processPendingMessages
+-(void)processPendingMessages
 {
     ALMessageDBService * dbService = [[ALMessageDBService alloc] init];
     NSMutableArray * pendingMessageArray = [dbService getPendingMessages];
@@ -748,7 +612,7 @@ withAttachmentAtLocation:(NSString *)attachmentLocalPath
         if((!msg.fileMeta && !msg.pairedMessageKey))
         {
             ALSLog(ALLoggerSeverityInfo, @"RESENDING_MESSAGE : %@", msg.message);
-            [self sendMessages:msg withCompletion:^(NSString *message, NSError *error) {
+            [[ALMessageService sharedInstance] sendMessages:msg withCompletion:^(NSString *message, NSError *error) {
                 if(error)
                 {
                     ALSLog(ALLoggerSeverityError, @"PENDING_MESSAGES_NO_SENT : %@", error);
@@ -761,21 +625,25 @@ withAttachmentAtLocation:(NSString *)attachmentLocalPath
         else if(msg.contentType == ALMESSAGE_CONTENT_VCARD)
         {
             ALSLog(ALLoggerSeverityInfo, @"REACH_PRESENT");
-            NSError *THE_ERROR;
-            DB_Message *dbMessage = (DB_Message*)[dbService getMeesageById:msg.msgDBObjectId error:&THE_ERROR];
-            ALSLog(ALLoggerSeverityError, @"ERROR_IF_ANY : %@", THE_ERROR);
+            DB_Message *dbMessage = (DB_Message*)[dbService getMessageByKey:@"key" value:msg.key];
             dbMessage.inProgress = [NSNumber numberWithBool:YES];
             dbMessage.isUploadFailed = [NSNumber numberWithBool:NO];
             [[ALDBHandler sharedInstance].managedObjectContext save:nil];
 
+            ALHTTPManager *httpManager = [[ALHTTPManager alloc]init];
+            httpManager.attachmentProgressDelegate = self;
+
             ALMessageClientService * clientService = [ALMessageClientService new];
             NSDictionary *info = [msg dictionary];
-            [clientService sendPhotoForUserInfo:info withCompletion:^(NSString *message, NSError *error) {
+            [clientService sendPhotoForUserInfo:info withCompletion:^(NSString *responseUrl, NSError *error) {
 
                 if(!error)
                 {
-                    ALMessageService *alMessageService = [ALMessageService new];
-                    [ALMessageService proessUploadImageForMessage:msg databaseObj:dbMessage.fileMetaInfo uploadURL:message withdelegate:alMessageService];
+
+                    ALHTTPManager *httpManager = [[ALHTTPManager alloc]init];
+                    httpManager.attachmentProgressDelegate = self;
+                    [httpManager processUploadFileForMessage:[dbService createMessageEntity:dbMessage] uploadURL:responseUrl];
+
                 }
             }];
         }
@@ -856,58 +724,6 @@ withAttachmentAtLocation:(NSString *)attachmentLocalPath
 
         completion(json, error);
     }];
-}
-
--(void)connectionDidFinishLoading:(ALConnection *)connection
-{
-    [[[ALConnectionQueueHandler sharedConnectionQueueHandler] getCurrentConnectionQueue] removeObject:connection];
-    ALMessageDBService * dbService = [[ALMessageDBService alloc] init];
-    if ([connection.connectionType isEqualToString:@"Image Posting"])
-    {
-        DB_Message * dbMessage = (DB_Message*)[dbService getMessageByKey:@"key" value:connection.keystring];
-        ALMessage * message = [dbService createMessageEntity:dbMessage];
-        NSError * theJsonError = nil;
-        NSDictionary *theJson = [NSJSONSerialization JSONObjectWithData:connection.mData options:NSJSONReadingMutableLeaves error:&theJsonError];
-
-        if(ALApplozicSettings.isS3StorageServiceEnabled){
-            [message.fileMeta populate:theJson];
-        }else{
-            NSDictionary *fileInfo = [theJson objectForKey:@"fileMeta"];
-            [message.fileMeta populate:fileInfo];
-        }
-
-        ALMessage * almessage =  [ALMessageService processFileUploadSucess:message];
-        [ALMessageService sendMessages:almessage withCompletion:^(NSString *message, NSError *error) {
-
-            if(error)
-            {
-                ALSLog(ALLoggerSeverityError, @"REACH_SEND_ERROR : %@",error);
-                return;
-            }
-            [[NSNotificationCenter defaultCenter] postNotificationName:@"UPDATE_MESSAGE_SEND_STATUS" object:almessage];
-        }];
-    }
-}
-
--(void)connection:(ALConnection *)connection didSendBodyData:(NSInteger)bytesWritten
-totalBytesWritten:(NSInteger)totalBytesWritten totalBytesExpectedToWrite:(NSInteger)totalBytesExpectedToWrite
-{
-    //    NSLog(@"didSendBodyData..");
-}
-
--(void)connection:(ALConnection *)connection didReceiveData:(NSData *)data
-{
-    [connection.mData appendData:data];
-    if ([connection.connectionType isEqualToString:@"Image Posting"])
-    {
-        ALSLog(ALLoggerSeverityInfo, @"FILE_POSTING_MSG_SERVICE");
-        return;
-    }
-}
-
--(void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
-{
-    ALSLog(ALLoggerSeverityError, @"OFFLINE_FAILED_TO_UPLOAD : %@", error);
 }
 
 +(ALMessage *)createCustomTextMessageEntitySendTo:(NSString *)to withText:(NSString*)text
@@ -992,7 +808,7 @@ totalBytesWritten:(NSInteger)totalBytesWritten totalBytesExpectedToWrite:(NSInte
     return [alMsgDBService createMessageEntity:dbMessage];
 }
 
-+(void)addOpenGroupMessage:(ALMessage*)alMessage{
++(void)addOpenGroupMessage:(ALMessage*)alMessage withDelegate:(id<ApplozicUpdatesDelegate>)delegate{
     {
 
         if(!alMessage){
@@ -1001,18 +817,22 @@ totalBytesWritten:(NSInteger)totalBytesWritten totalBytesExpectedToWrite:(NSInte
 
         NSMutableArray * singlemessageArray = [[NSMutableArray alloc] init];
         [singlemessageArray addObject:alMessage];
-        NSMutableArray * hiddenMsgFilteredArray = [[NSMutableArray alloc] initWithArray:singlemessageArray];
-        for(ALMessage * message in hiddenMsgFilteredArray)
-        {
-
+        for (int i=0; i<singlemessageArray.count; i++) {
+            ALMessage * message = singlemessageArray[i];
             if (message.groupId != nil && message.contentType == ALMESSAGE_CHANNEL_NOTIFICATION) {
                 ALChannelService *channelService = [[ALChannelService alloc] init];
-                [channelService syncCallForChannel];
+                [channelService syncCallForChannelWithDelegate:delegate];
                 if([message isMsgHidden]) {
-                    [singlemessageArray removeObject:message];
+                    [singlemessageArray removeObjectAtIndex:i];
                 }
             }
-
+            if(delegate){
+                if([message.type  isEqual: OUT_BOX]){
+                    [delegate onMessageSent: message];
+                }else{
+                    [delegate onMessageReceived: message];
+                }
+            }
         }
 
         [ALUserService processContactFromMessages:singlemessageArray withCompletion:^{
@@ -1023,5 +843,101 @@ totalBytesWritten:(NSInteger)totalBytesWritten totalBytesExpectedToWrite:(NSInte
     }
 }
 
+-(void) getLatestMessages:(BOOL)isNextPage withOnlyGroups:(BOOL)isGroup withCompletionHandler: (void(^)(NSMutableArray * messageList, NSError *error)) completion{
+
+    ALMessageDBService *messageDbService = [[ALMessageDBService alloc] init];
+
+    [messageDbService getLatestMessages:isNextPage withOnlyGroups:isGroup withCompletionHandler:^(NSMutableArray *messageList, NSError *error) {
+
+
+        completion(messageList,error);
+
+    }];
+}
+
+-(ALMessage *)handleMessageFailedStatus:(ALMessage *)message{
+    ALMessageDBService *messageDBServce = [[ALMessageDBService alloc]init];
+    return [messageDBServce handleMessageFailedStatus:message];
+}
+
+-(ALMessage*) getMessageByKey:(NSString*)messageKey{
+    if(!messageKey){
+        return nil;
+    }
+
+    ALMessageDBService *messageDBServce = [[ALMessageDBService alloc]init];
+    return [messageDBServce getMessageByKey:messageKey];
+}
+
++ (void) syncMessageMetaData:(NSString *)deviceKeyString withCompletion:(void (^)( NSMutableArray *, NSError *))completion
+{
+    if(!alMsgClientService)
+    {
+        alMsgClientService = [[ALMessageClientService alloc] init];
+    }
+    @synchronized(alMsgClientService) {
+        [alMsgClientService getLatestMessageForUser:deviceKeyString withMetaDataSync:YES withCompletion:^(ALSyncMessageFeed * syncResponse , NSError *error) {
+            NSMutableArray *messageArray = nil;
+
+            if(!error)
+            {
+                if(syncResponse.messagesList.count > 0)
+                {
+                    messageArray = [[NSMutableArray alloc] init];
+                    ALMessageDBService *messageDatabase  = [[ALMessageDBService alloc]init];
+                    for(ALMessage * message in syncResponse.messagesList)
+                    {
+                        [messageDatabase updateMessageMetadataOfKey:message.key withMetadata:message.metadata];
+                        [[NSNotificationCenter defaultCenter] postNotificationName:MESSAGE_META_DATA_UPDATE object:message userInfo:nil];
+                    }
+                }
+                [ALUserDefaultsHandler setLastSyncTimeForMetaData:syncResponse.lastSyncTime];
+                completion(syncResponse.messagesList,error);
+            }
+            else
+            {
+                completion(messageArray,error);
+            }
+        }];
+    }
+}
+
+- (void)updateMessageMetadataOfKey:(NSString *)messageKey withMetadata:(NSMutableDictionary *)metadata withCompletion:(void (^)(ALAPIResponse *, NSError *))completion
+{
+    ALMessageClientService *messageService = [[ALMessageClientService alloc] init];
+    [messageService updateMessageMetadataOfKey:messageKey withMetadata:metadata withCompletion:^(id theJson, NSError *theError) {
+        ALAPIResponse * alAPIResponse;
+        if(!theError) {
+            ALMessageDBService *messagedb = [[ALMessageDBService alloc] init];
+            [messagedb updateMessageMetadataOfKey:messageKey withMetadata:metadata];
+            alAPIResponse = [[ALAPIResponse alloc] initWithJSONString:theJson];
+        }
+        completion(alAPIResponse,theError);
+    }];
+}
+
+- (void)onDownloadCompleted:(ALMessage *)alMessage {
+
+}
+
+- (void)onDownloadFailed:(ALMessage *)alMessage {
+
+}
+
+- (void)onUpdateBytesDownloaded:(int64_t)bytesReceived withMessage:(ALMessage *)alMessage {
+
+}
+
+- (void)onUpdateBytesUploaded:(int64_t)bytesSent withMessage:(ALMessage *)alMessage {
+
+}
+
+- (void)onUploadCompleted:(ALMessage *)alMessage withOldMessageKey:(NSString *)oldMessageKey {
+   [[NSNotificationCenter defaultCenter] postNotificationName:@"UPDATE_MESSAGE_SEND_STATUS" object:alMessage];
+}
+
+- (void)onUploadFailed:(ALMessage *)alMessage {
+
+}
 
 @end
