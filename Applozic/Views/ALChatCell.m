@@ -111,7 +111,7 @@
             fontName = DEFAULT_FONT_NAME;
         }
         
-        self.mMessageLabel.font = [UIFont fontWithName:[ALApplozicSettings getFontFace] size:MESSAGE_TEXT_SIZE];
+        self.mMessageLabel.font = [self getDynamicFontWithDefaultSize:[ALApplozicSettings getChatCellTextFontSize] fontName:[ALApplozicSettings getFontFace]];
         self.mMessageLabel.textColor = [UIColor grayColor];
         [self.contentView addSubview:self.mMessageLabel];
         
@@ -167,6 +167,20 @@
     
 }
 
+-(UIFont *)getDynamicFontWithDefaultSize:(CGFloat)size fontName:(NSString *)fontName
+{
+    UIFont *defaultFont = [UIFont fontWithName:fontName size:size];
+    if (!defaultFont) {
+        defaultFont = [UIFont systemFontOfSize:size];
+    }
+    
+    if ([ALApplozicSettings getChatCellFontTextStyle] && [ALApplozicSettings isTextStyleInCellEnabled]) {
+        if (@available(iOS 10.0, *)) {
+            return [UIFont preferredFontForTextStyle:[ALApplozicSettings getChatCellFontTextStyle]];
+        }
+    }
+    return defaultFont;
+}
 
 -(instancetype)populateCell:(ALMessage*) alMessage viewSize:(CGSize)viewSize
 {
@@ -260,7 +274,7 @@
         {
             [self.mChannelMemberName setHidden:NO];
             
-            [self.mChannelMemberName setTextColor: [ALColorUtility getColorForAlphabet:receiverName]];
+            [self.mChannelMemberName setTextColor: [ALColorUtility getColorForAlphabet:receiverName colorCodes:self.colourDictionary]];
             
             if(theTextSize.width < receiverNameSize.width)
             {
@@ -332,7 +346,7 @@
         {
             [self.mUserProfileImageView sd_setImageWithURL:[NSURL URLWithString:@""] placeholderImage:nil options:SDWebImageRefreshCached];
             [self.mNameLabel setHidden:NO];
-            self.mUserProfileImageView.backgroundColor = [ALColorUtility getColorForAlphabet:receiverName];
+            self.mUserProfileImageView.backgroundColor = [ALColorUtility getColorForAlphabet:receiverName colorCodes:self.colourDictionary];
         }
     }
     else    //Sent Message
@@ -409,8 +423,8 @@
         
     }
     
-    if ([alMessage.type isEqualToString:@MT_OUTBOX_CONSTANT] && (alMessage.contentType != ALMESSAGE_CHANNEL_NOTIFICATION)) {
-        
+    if ([alMessage isSentMessage] && ![alMessage isChannelContentTypeMessage] && ((self.channel && self.channel.type != OPEN) || self.contact)) {
+
         self.mMessageStatusImageView.hidden = NO;
         NSString * imageName;
         
@@ -445,7 +459,7 @@
     
     /*    ====================================== END =================================  */
     
-    self.mMessageLabel.font = [UIFont fontWithName:[ALApplozicSettings getFontFace] size:MESSAGE_TEXT_SIZE];
+    self.mMessageLabel.font = [self getDynamicFontWithDefaultSize:[ALApplozicSettings getChatCellTextFontSize] fontName:[ALApplozicSettings getFontFace]];
     if(alMessage.contentType == ALMESSAGE_CONTENT_TEXT_HTML)
     {
         
@@ -483,22 +497,22 @@
 -(void) proccessTapForMenu:(id)tap{
 
     [self processKeyBoardHideTap];
-    
+
      UIMenuItem * messageForward = [[UIMenuItem alloc] initWithTitle:NSLocalizedStringWithDefaultValue(@"forwardOptionTitle", [ALApplozicSettings getLocalizableName],[NSBundle mainBundle], @"Forward", @"") action:@selector(messageForward:)];
        UIMenuItem * messageReply = [[UIMenuItem alloc] initWithTitle:NSLocalizedStringWithDefaultValue(@"replyOptionTitle", [ALApplozicSettings getLocalizableName],[NSBundle mainBundle], @"Reply", @"") action:@selector(messageReply:)];
-    
+
     if ([self.mMessage.type isEqualToString:@MT_INBOX_CONSTANT]){
-       
+
         [[UIMenuController sharedMenuController] setMenuItems: @[messageForward,messageReply]];
 
     }else if ([self.mMessage.type isEqualToString:@MT_OUTBOX_CONSTANT]){
-       
+
         UIMenuItem * msgInfo = [[UIMenuItem alloc] initWithTitle:NSLocalizedStringWithDefaultValue(@"infoOptionTitle", [ALApplozicSettings getLocalizableName],[NSBundle mainBundle], @"Info", @"") action:@selector(msgInfo:)];
-        
+
         [[UIMenuController sharedMenuController] setMenuItems: @[msgInfo,messageReply,messageForward]];
     }
        [[UIMenuController sharedMenuController] update];
-    
+
 }
 
 -(void)dateTextSetupForALMessage:(ALMessage *)alMessage withViewSize:(CGSize)viewSize andTheTextSize:(CGSize)theTextSize
@@ -535,7 +549,7 @@
         }
     }
     
-    if([self.mMessage.type isEqualToString:@MT_OUTBOX_CONSTANT] && self.mMessage.groupId)
+    if([self.mMessage isSentMessage] && self.mMessage.groupId)
     {
         return (self.mMessage.isDownloadRequired? (action == @selector(delete:) || action == @selector(msgInfo:) || action == @selector(copy:)) : (action == @selector(delete:)|| action == @selector(msgInfo:)|| [self isForwardMenuEnabled:action]  || [self isMessageReplyMenuEnabled:action] || action == @selector(copy:)));
     }
@@ -719,11 +733,11 @@
     if(self.mBubleImageView.frame.size.width> replyWidthRequired )
     {
         replyWidthRequired = (self.mBubleImageView.frame.size.width);
-        ALSLog(ALLoggerSeverityInfo, @" replyWidthRequired is less from parent one : %d", replyWidthRequired);
+        ALSLog(ALLoggerSeverityInfo, @" replyWidthRequired is less from parent one : %f", replyWidthRequired);
     }
     else
     {
-        ALSLog(ALLoggerSeverityInfo, @" replyWidthRequired is grater from parent one : %d", replyWidthRequired);
+        ALSLog(ALLoggerSeverityInfo, @" replyWidthRequired is grater from parent one : %f", replyWidthRequired);
         
     }
     
@@ -767,7 +781,7 @@
         [v removeFromSuperview];
     }
     
-    [self.replyParentView setBackgroundColor:[UIColor redColor]];
+    [self.replyParentView setBackgroundColor:[ALApplozicSettings getBackgroundColorForReplyView]];
     [self.replyUIView populateUI:almessage withSuperView:self.replyParentView];
     [self.replyParentView addSubview:self.replyUIView];
     

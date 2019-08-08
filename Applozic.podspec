@@ -17,7 +17,7 @@ Pod::Spec.new do |s|
   #
 
   s.name         = "Applozic"
-  s.version      = "5.12.0"
+  s.version      = "6.13.0"
   s.summary      = "Applozic Light weight CocoaPod for in-app messaging and chat SDK"
 
   # This description is used to generate tags and improve search results.
@@ -64,7 +64,7 @@ Pod::Spec.new do |s|
   #
 
   # s.platform     = :ios
-  s.platform     = :ios, "8.0"
+  s.platform     = :ios, "9.0"
 
   #  When using multiple platforms
   # s.ios.deployment_target = "5.0"
@@ -92,7 +92,7 @@ Pod::Spec.new do |s|
 
   s.source_files  = "Applozic", "Applozic/**/*.{h,m,swift}"
   s.exclude_files = "Classes/Exclude"
-  s.swift_version = '4.1'
+  s.swift_version = '4.2'
   s.prefix_header_file = 'Applozic/Applozic_Prefix.pch'
   # s.public_header_files = "Classes/**/*.h"
 
@@ -136,5 +136,5 @@ Pod::Spec.new do |s|
   s.requires_arc = true
 
   # s.xcconfig = { "HEADER_SEARCH_PATHS" => "$(SDKROOT)/usr/include/libxml2" }
-  s.dependency 'SDWebImage', '~>4.4'
+  s.dependency 'SDWebImage', '~>5.0.6'
 end

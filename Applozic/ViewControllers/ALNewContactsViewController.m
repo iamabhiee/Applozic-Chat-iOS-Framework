@@ -30,23 +30,30 @@
 #import "ALSubViewController.h"
 #import "ALApplozicSettings.h"
 #import "ALMessageClientService.h"
+#import "ApplozicClient.h"
+
 
 #define DEFAULT_TOP_LANDSCAPE_CONSTANT -34
 #define DEFAULT_TOP_PORTRAIT_CONSTANT -64
 
 
 
-@interface ALNewContactsViewController ()
+@interface ALNewContactsViewController ()<ApplozicAttachmentDelegate>
 
 @property (strong, nonatomic) NSMutableArray *contactList;
 
 @property (weak, nonatomic) IBOutlet UIActivityIndicatorView *activityIndicator;
+
+@property (nonatomic, retain) UIAlertController * uiAlertController;
 
 @property (strong, nonatomic) UISearchBar *searchBar;
 
 @property (strong, nonatomic) NSMutableArray *filteredContactList;
 
 @property (strong, nonatomic) NSString *stopSearchText;
+@property (strong, nonatomic) ApplozicClient *applozicClient;
+
+@property (nonatomic, retain) UIProgressView *uiProgress;
 
 @property  NSUInteger lastSearchLength;
 
@@ -71,7 +78,10 @@
     [[self activityIndicator] startAnimating];
     self.selectedSegment = 0;
     [ALUserDefaultsHandler setContactServerCallIsDone:NO];
-    
+
+    self.applozicClient = [[ApplozicClient alloc ]initWithApplicationKey:ALUserDefaultsHandler.getApplicationKey];
+    self.applozicClient.attachmentProgressDelegate = self;
+
     [self.segmentControl setTitle:  NSLocalizedStringWithDefaultValue(@"contactsTitle", [ALApplozicSettings getLocalizableName], [NSBundle mainBundle], @"Contacts" , @"") forSegmentAtIndex:0];
     
     [self.segmentControl setTitle:  NSLocalizedStringWithDefaultValue(@"groupsTitle", [ALApplozicSettings getLocalizableName], [NSBundle mainBundle], @"Groups" , @"") forSegmentAtIndex:1];
@@ -129,6 +139,18 @@
     self.groupMembers=[[NSMutableSet alloc] init];
     
     [self emptyConversationAlertLabel];
+    
+    [self.segmentControl setTintColor:[ALApplozicSettings getNewContactMainColour]];
+    [self.segmentControl setBackgroundColor:[ALApplozicSettings getNewContactSubColour]];
+    
+    UIColor *textColor = [ALApplozicSettings getNewContactTextColour];
+    if(textColor != nil){
+        NSDictionary *highlightedAttributes = [NSDictionary dictionaryWithObject:textColor forKey:NSForegroundColorAttributeName];
+        [self.segmentControl setTitleTextAttributes:highlightedAttributes forState:UIControlStateSelected];
+        [self.segmentControl setTitleTextAttributes:highlightedAttributes forState:UIControlStateNormal];
+    }
+    
+    [_searchBar setBarTintColor:[ALApplozicSettings getSearchBarTintColour]];
 }
 
 -(void)subProcessContactFetch
@@ -764,7 +786,7 @@
                     [self subProcessContactFetch];
                     
                     dispatch_async(dispatch_get_main_queue(), ^{
-                        [self getSerachResult:_stopSearchText];
+                        [self getSerachResult:self.stopSearchText];
                     });
                 }
                 [[self activityIndicator] stopAnimating];
@@ -860,6 +882,9 @@
 {
     if(self.directContactVCLaunch || self.directContactVCLaunchForForward)
     {
+        if(self.directContactVCLaunch){
+           [[NSNotificationCenter defaultCenter] postNotificationName:@"DISMISS_SHARE_EXTENSION" object:nil];
+        }
         [self  dismissViewControllerAnimated:YES completion:nil];
     }
     else
@@ -883,7 +908,7 @@
         {
             case 0:
             {
-                ALContactService * contactService = [ALContactService new];
+                 ALContactService * contactService = [ALContactService new];
                 if(![contactService isUserDeleted:contactId]){
                     self.alMessage.contactIds = contactId;
                     self.alMessage.to = contactId;
@@ -918,36 +943,10 @@
         return;
     }else if(self.directContactVCLaunch)  // IF DIRECT CONTACT VIEW LAUNCH FROM ALCHATLAUNCHER
     {
-        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Applozic"
-                                                             bundle:[NSBundle bundleForClass:ALChatViewController.class]];
-        
-        ALChatViewController *chatView = (ALChatViewController *) [storyboard instantiateViewControllerWithIdentifier:@"ALChatViewController"];
-        chatView.alMessage = self.alMessage;
-        chatView.individualLaunch = YES;
-        
-        switch (self.selectedSegment)
-        {
-                
-            case 0:
-            {
-                chatView.channelKey = nil;
-                chatView.contactIds = contactId;
-                [self.navigationController pushViewController:chatView animated:YES];
-                [self removeFromParentViewController];
-            }
-                break;
-            case 1:
-            {
-                chatView.channelKey = channelKey;
-                chatView.contactIds = contactId;
-                [self.navigationController pushViewController:chatView animated:YES];
-                [self removeFromParentViewController];
-                
-            }
-                break;
-            default:
-                break;
-        }
+        self.alMessage.contactIds = contactId;
+        self.alMessage.groupId = channelKey;
+        [self showAlertControllerView];
+        [self sendMessage:self.alMessage];
         return;
     }
     
@@ -995,6 +994,21 @@
             self.navigationController.viewControllers = viewControllersFromStack;
         }
     }
+}
+
+-(void)showAlertControllerView{
+    self.uiAlertController = [UIAlertController alertControllerWithTitle:@""
+                                                                 message:NSLocalizedStringWithDefaultValue(@"SendingMessage", [ALApplozicSettings getLocalizableName], [NSBundle mainBundle], @"Sending..." , @"")
+                                                          preferredStyle:UIAlertControllerStyleAlert];
+
+    self.uiProgress = [[UIProgressView alloc] init];
+
+    [self.uiProgress setProgress:0];
+
+    self.uiProgress.frame = CGRectMake(10, 17,
+                                       250,0);
+    [self.uiAlertController.view addSubview:self.uiProgress];
+    [self presentViewController:self.uiAlertController animated:YES completion:nil];
 }
 
 -(UIView *)setCustomBackButton:(NSString *)text
@@ -1140,7 +1154,7 @@
                                                                  }
                                                                  else if ([ALPushAssist isViewObjIsMsgContainerVC:aViewController])
                                                                  {
-                                                                     ALSubViewController * msgSubView = aViewController;
+                                                                     ALSubViewController * msgSubView = (ALSubViewController *)aViewController;
                                                                      [msgSubView.msgView insertChannelMessage:alChannel.key];
                                                                      [self.navigationController popToViewController:aViewController animated:YES];
                                                                  }
@@ -1183,7 +1197,7 @@
                                          }
                                          else if ([ALPushAssist isViewObjIsMsgContainerVC:aViewController])
                                          {
-                                             ALSubViewController * msgSubView = aViewController;
+                                             ALSubViewController * msgSubView = (ALSubViewController*)aViewController;
                                              [msgSubView.msgView insertChannelMessage:alChannel.key];
                                              [self.navigationController popToViewController:aViewController animated:YES];
                                          }
@@ -1442,9 +1456,9 @@
             return;
         }
         
-        if(_stopSearchText != nil){
+        if(self->_stopSearchText != nil){
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self getSerachResult:_stopSearchText];
+                [self getSerachResult:self->_stopSearchText];
             });
             [[self activityIndicator] stopAnimating];
         }else{
@@ -1569,5 +1583,71 @@
     }];
 }
 
+
+-(void)sendMessage:(ALMessage *) msgObject{
+
+    ALMessage *alMessage = [ALMessage build:^(ALMessageBuilder * alMessageBuilder) {
+        if(msgObject.contactIds){
+            alMessageBuilder.to = msgObject.contactIds;
+        }else if(msgObject.groupId != nil){
+            alMessageBuilder.groupId = msgObject.groupId;
+        }
+        alMessageBuilder.message = msgObject.message;
+        alMessageBuilder.imageFilePath = msgObject.imageFilePath;
+        alMessageBuilder.contentType = ALMESSAGE_CONTENT_ATTACHMENT;
+
+    }];
+    [self.applozicClient sendMessageWithAttachment:alMessage];
+}
+
+
+
+- (void)onDownloadCompleted:(ALMessage *)alMessage {
+
+}
+
+- (void)onDownloadFailed:(ALMessage *)alMessage {
+
+}
+
+- (void)onUpdateBytesDownloaded:(int64_t)bytesReceived withMessage:(ALMessage *)alMessage {
+
+}
+
+- (void)onUpdateBytesUploaded:(int64_t)bytesSent withMessage:(ALMessage *)alMessage {
+
+    NSString * docDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+    NSString * filePath = [docDir stringByAppendingPathComponent:alMessage.imageFilePath];
+
+    unsigned long long fileSize;
+
+    if([[NSFileManager defaultManager] fileExistsAtPath:filePath]){
+        fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:nil] fileSize];
+    }else{
+        NSURL *documentDirectory   = [[NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier:[ALApplozicSettings getShareExtentionGroup]];
+        documentDirectory = [documentDirectory  URLByAppendingPathComponent:alMessage.imageFilePath];
+        fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:documentDirectory.path error:nil] fileSize];
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.uiProgress.progress = ((100.0/fileSize)*bytesSent)/100;
+    });
+
+}
+
+- (void)onUploadCompleted:(ALMessage *)alMessage withOldMessageKey:(NSString *)oldMessageKey {
+
+    [self.uiAlertController dismissViewControllerAnimated:NO completion:nil];
+    if(self.directContactVCLaunch){
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"DISMISS_SHARE_EXTENSION" object:nil];
+    }
+}
+
+- (void)onUploadFailed:(ALMessage *)alMessage {
+
+    [self.uiAlertController dismissViewControllerAnimated:NO completion:nil];
+    if(self.directContactVCLaunch){
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"DISMISS_SHARE_EXTENSION" object:nil];
+    }
+}
 
 @end
