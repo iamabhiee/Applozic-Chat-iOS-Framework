@@ -18,6 +18,7 @@
 #import "ALMessageService.h"
 #import "ALUserService.h"
 #import "NSData+AES.h"
+#import "ALDataNetworkConnection.h"
 
 #define MQTT_TOPIC_STATUS @"status-v2"
 #define MQTT_ENCRYPTION_SUB_KEY @"encr-"
@@ -404,7 +405,7 @@ static NSString * const observeSupportGroupMessage = @"observeSupportGroupMessag
         {
             [self processUserBlockNotification:theMessageDict andUserBlockFlag:NO];
         }
-        else if ([type isEqualToString:@"APPLOZIC_30"])
+        else if ([type isEqualToString:@"APPLOZIC_30"] || [type isEqualToString:@"APPLOZIC_34"])
         {
             //          FETCH USER DETAILS and UPDATE DB AND REAL-TIME
             NSString * userId = [theMessageDict objectForKey:@"message"];
@@ -739,6 +740,29 @@ static NSString * const observeSupportGroupMessage = @"observeSupportGroupMessag
         }*/
 
     }];
+}
+
+-(BOOL)shouldRetry {
+    BOOL isInBackground = [UIApplication sharedApplication].applicationState == UIApplicationStateBackground;
+    return !isInBackground && [ALDataNetworkConnection checkDataNetworkAvailable];
+}
+
+- (void)retryConnection {
+    if (![self shouldRetry]) {
+        return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self subscribeToConversation];
+    });
+}
+
+- (void)retryConnectionWithTopic:(NSString *)topic {
+    if (![self shouldRetry]) {
+        return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self subscribeToConversationWithTopic: topic];
+    });
 }
 
 @end

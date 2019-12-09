@@ -40,8 +40,13 @@
     [ALUserDefaultsHandler setPassword:user.password];
     [ALUserDefaultsHandler setDisplayName:user.displayName];
     [ALUserDefaultsHandler setEmailId:user.email];
-    
-    [ALUserDefaultsHandler setApplicationKey: user.applicationId];
+
+    NSString *applicationId = [ALUserDefaultsHandler getApplicationKey];
+    if (applicationId) {
+        [user setApplicationId: applicationId];
+    } else { // For backward compatibility
+        [ALUserDefaultsHandler setApplicationKey: user.applicationId];
+    }
     [user setPrefContactAPI:2];
     [user setEmailVerified:true];
     [user setDeviceType:4];
@@ -168,19 +173,10 @@
             ALSLog(ALLoggerSeverityInfo, @"..");
         }
         
-        
-        
         [self connect];
-        ALMessageDBService * dbService = [[ALMessageDBService alloc] init];
-        if(dbService.isMessageTableEmpty)
-        {
-            [ALMessageService processLatestMessagesGroupByContactWithCompletion:^{
-                completion(response,nil);
-            }];
-        } else {
-            completion(response,nil);
-        }
-        
+
+        completion(response,nil);
+
         ALUserService * alUserService = [ALUserService new];
         [alUserService updateUserApplicationInfo];
         

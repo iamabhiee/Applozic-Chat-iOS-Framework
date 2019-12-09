@@ -60,6 +60,11 @@
 
 +(void)updateUserDetail:(NSString *)userId withCompletion:(void(^)(ALUserDetail *userDetail))completionMark;
 
+-(void)updateUser:(NSString *)phoneNumber
+            email:(NSString *)email
+           ofUser:(NSString *)userId
+   withCompletion:(void (^)(BOOL))completion;
+
 -(void) fetchAndupdateUserDetails:(NSMutableArray *)userArray withCompletion:(void (^)(NSMutableArray * array, NSError *error))completion;
 
 -(void)getUserDetail:(NSString*)userId withCompletion:(void(^)(ALContact *contact))completion;
@@ -90,5 +95,7 @@
  @param completion ALAPIResponse repoonse callback if success or error and NSError if any error occurs
  */
 -(void)reportUserWithMessageKey:(NSString *) messageKey  withCompletion:(void (^)(ALAPIResponse *apiResponse, NSError *error))completion;
+
+-(void)disableChat:(BOOL) disable withCompletion: (void(^)(BOOL response, NSError *error)) completion;
 
 @end

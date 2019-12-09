@@ -528,7 +528,7 @@
 - (void)searchMessage: (NSString *)key withCompletion: (void (^)(NSMutableArray<ALMessage *> *, NSError *))completion {
     ALSLog(ALLoggerSeverityInfo, @"Search messages with %@", key);
     NSString *urlString = [NSString stringWithFormat:@"%@/rest/ws/group/support", KBASE_URL];
-    NSString *paramString = [NSString stringWithFormat:@"search=%@", key];
+    NSString *paramString = [NSString stringWithFormat:@"search=%@", [key urlEncodeUsingNSUTF8StringEncoding]];
     NSMutableURLRequest *urlRequest = [ALRequestHandler
                                        createGETRequestWithUrlString: urlString
                                        paramString: paramString];
@@ -574,6 +574,65 @@
      }];
 }
 
+- (void)searchMessageWith: (ALSearchRequest *)request withCompletion: (void (^)(NSMutableArray<ALMessage *> *, NSError *))completion {
+
+    if(!request.searchText || request.searchText.length == 0 ) {
+        NSError *error = [NSError
+                          errorWithDomain:@"Applozic"
+                          code:1
+                          userInfo:[NSDictionary
+                                    dictionaryWithObject:@"Search text is empty or nil"
+                                    forKey:NSLocalizedDescriptionKey]];
+        completion(nil, error);
+        return;
+    }
+
+    NSString *urlString = [NSString stringWithFormat:@"%@/rest/ws/message/search", KBASE_URL];
+    NSString *paramString = [request getParamString];
+    NSMutableURLRequest *urlRequest = [ALRequestHandler
+                                       createGETRequestWithUrlString: urlString
+                                       paramString: paramString];
+    [ALResponseHandler
+     processRequest: urlRequest
+     andTag: @"Search messages"
+     WithCompletionHandler: ^(id theJson, NSError *theError) {
+         if (theError) {
+             ALSLog(ALLoggerSeverityError, @"Search messages ERROR :: %@",theError.description);
+             completion(nil, theError);
+             return;
+         }
+         if (![[theJson valueForKey:@"status"] isEqualToString:@"success"]) {
+             ALSLog(ALLoggerSeverityError, @"Search messages ERROR :: %@",theError.description);
+             NSError *error = [NSError
+                               errorWithDomain:@"Applozic"
+                               code:1
+                               userInfo:[NSDictionary
+                                         dictionaryWithObject:@"Status fail in response"
+                                         forKey:NSLocalizedDescriptionKey]];
+             completion(nil, error);
+             return;
+         }
+         NSDictionary *response = [theJson valueForKey: @"response"];
+         if (response == nil) {
+             ALSLog(ALLoggerSeverityError, @"Search messages RESPONSE is nil");
+             NSError *error = [NSError errorWithDomain:@"response is nil" code:0 userInfo:nil];
+             completion(nil, error);
+             return;
+         }
+         ALSLog(ALLoggerSeverityInfo, @"Search messages RESPONSE :: %@", (NSString *)theJson);
+         NSMutableArray<ALMessage *> *messages = [NSMutableArray new];
+         NSDictionary *messageDict = [response valueForKey: @"message"];
+         for (NSDictionary *dict in messageDict) {
+             ALMessage *message = [[ALMessage alloc] initWithDictonary: dict];
+             [messages addObject: message];
+         }
+         ALChannelFeed *channelFeed = [[ALChannelFeed alloc] initWithJSONString: response];
+         [[SearchResultCache shared] saveChannels: channelFeed.channelFeedsList];
+         completion(messages, nil);
+         return;
+     }];
+}
+
 - (void)getMessageListForUser: (MessageListRequest *)messageListRequest
                      isSearch: (BOOL)flag
                withCompletion: (void (^)(NSMutableArray<ALMessage *> *, NSError *))completion {
@@ -608,6 +667,30 @@
         [[SearchResultCache shared] saveUserDetails: userDetails];
 
         completion(messages, nil);
+    }];
+}
+
+- (void)getMessagesWithkeys:(NSMutableArray<NSString *> *)keys withCompletion:(void (^)(ALAPIResponse *, NSError *))completion {
+    NSString *urlString = [NSString stringWithFormat:@"%@/rest/ws/message/detail", KBASE_URL];
+    NSMutableString *paramString = [[NSMutableString alloc] init];
+    for (NSString* key in keys) {
+        [paramString appendString: [NSString stringWithFormat:@"keys=%@&", key]];
+    }
+
+    if (keys.count > 0) {
+        /// We have an extra ampersand.
+        [paramString deleteCharactersInRange:NSMakeRange([paramString length] - 1, 1)];
+    }
+    NSMutableURLRequest* request = [ALRequestHandler createGETRequestWithUrlString: urlString paramString: paramString];
+    [ALResponseHandler processRequest:request andTag:@"Get hidden messages" WithCompletionHandler:^(id theJson, NSError *theError) {
+        if (theError) {
+            ALSLog(ALLoggerSeverityError, @"Fetching message error", (NSString *)theJson);
+            completion(nil, theError);
+            return;
+        }
+        ALAPIResponse* response = [[ALAPIResponse alloc] initWithJSONString:theJson];
+        ALSLog(ALLoggerSeverityInfo, @"Messages fetched successfully", (NSString *)theJson);
+        completion(response, nil);
     }];
 }
 

@@ -21,6 +21,7 @@
 #import "ALChannelService.h"
 #import "ALChannel.h"
 #import "ALUserService.h"
+#import "ALUtilityClass.h"
 
 @implementation ALMessageDBService
 
@@ -42,6 +43,12 @@
 
             [messageArray addObject:theMessage];
 
+        } else if (message != nil) {
+            DB_Message* dbMessage = message;
+            if (dbMessage && [dbMessage.replyMessageType intValue] == AL_REPLY_BUT_HIDDEN) {
+                int replyType = (dbMessage.metadata && [dbMessage.metadata containsString:AL_MESSAGE_REPLY_KEY]) ? AL_A_REPLY : AL_NOT_A_REPLY;
+                [self updateMessageReplyType:dbMessage.key replyType: [NSNumber numberWithInt:replyType] hideFlag:NO];
+            }
         }
     }
     NSError * error;
@@ -937,13 +944,14 @@ FETCH LATEST MESSSAGE FOR SUB GROUPS
 }
 
 
--(void) updateMessageReplyType:(NSString*)messageKeyString replyType : (NSNumber *) type {
+-(void) updateMessageReplyType:(NSString*)messageKeyString replyType : (NSNumber *) type hideFlag:(BOOL)flag {
 
     ALDBHandler * dbHandler = [ALDBHandler sharedInstance];
 
     DB_Message * replyMessage = (DB_Message *)[self getMessageByKey:@"key" value:messageKeyString];
 
     replyMessage.replyMessageType = type;
+    replyMessage.msgHidden = [NSNumber numberWithBool:flag];
 
     NSError *Error = nil;
 
@@ -1186,66 +1194,15 @@ FETCH LATEST MESSSAGE FOR SUB GROUPS
     return message;
 }
 
-- (NSData *)compressImage:(NSData *) data forMessage:(DB_Message *)message{
-    /// Only for image, rest good to go
-    if (![message.fileMetaInfo.contentType hasPrefix:@"image"]) {
-        return data;
-    }
-    float compressRatio;
-    switch (message.fileMetaInfo.size.intValue) {
-        case 0 ...  10 * 1024 * 1024:
-            return data;
-        case (10 * 1024 * 1024 + 1) ... 50 * 1024 * 1024:
-            compressRatio = 0.5; //50%
-            break;
-        default:
-            compressRatio = 0.1; //10%;
-    }
-    UIImage *image = [[UIImage alloc] initWithData: data];
-    float actualHeight = image.size.height;
-    float actualWidth = image.size.width;
-    float maxHeight = 300.0;
-    float maxWidth = 400.0;
-    float imgRatio = actualWidth / actualHeight;
-    float maxRatio = maxWidth / maxHeight;
-
-    if (actualHeight > maxHeight || actualWidth > maxWidth)
-    {
-        if(imgRatio < maxRatio)
-        {
-            //adjust width according to maxHeight
-            imgRatio = maxHeight / actualHeight;
-            actualWidth = imgRatio * actualWidth;
-            actualHeight = maxHeight;
-        }
-        else if(imgRatio > maxRatio)
-        {
-            //adjust height according to maxWidth
-            imgRatio = maxWidth / actualWidth;
-            actualHeight = imgRatio * actualHeight;
-            actualWidth = maxWidth;
-        }
-        else
-        {
-            actualHeight = maxHeight;
-            actualWidth = maxWidth;
-        }
-    }
-
-    CGRect rect = CGRectMake(0.0, 0.0, actualWidth, actualHeight);
-    UIGraphicsBeginImageContext(rect.size);
-    [image drawInRect:rect];
-    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
-    NSData *imageData = UIImageJPEGRepresentation(img, compressRatio);
-    UIGraphicsEndImageContext();
-    return imageData;
-}
-
-
 -(ALMessage*)writeDataAndUpdateMessageInDb:(NSData*)data withMessageKey:(NSString *)messageKey withFileFlag:(BOOL)isFile{
 
     DB_Message * messageEntity = (DB_Message*)[self getMessageByKey:@"key" value:messageKey];
-    NSData *imageData = [self compressImage:data forMessage:messageEntity];
+    NSData *imageData;
+    if (![messageEntity.fileMetaInfo.contentType hasPrefix:@"image"]) {
+        imageData = data;
+    } else {
+        imageData = [ALUtilityClass compressImage: data];
+    }
 
     NSString * docPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
     NSArray *componentsArray = [messageEntity.fileMetaInfo.name componentsSeparatedByString:@"."];

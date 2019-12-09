@@ -383,16 +383,28 @@ typedef NS_ENUM(NSInteger, ApplozicUserClientError) {
 #pragma mark UPDATE USER Display Name/Status/Profile Image
 //========================================================================================================================
 
--(void)updateUserDisplayName:(NSString *)displayName andUserImageLink:(NSString *)imageLink userStatus:(NSString *)status
+-(void)updateUserDisplayName:(NSString *)displayName
+            andUserImageLink:(NSString *)imageLink
+                  userStatus:(NSString *)status
+                    metadata:(NSMutableDictionary *)metadata
               withCompletion:(void (^)(id theJson, NSError * error))completionHandler
 {
     
     NSString * theUrlString = [NSString stringWithFormat:@"%@/rest/ws/user/update",KBASE_URL];
     
     NSMutableDictionary *dictionary = [NSMutableDictionary new];
-    [dictionary setObject:displayName forKey:@"displayName"];
-    [dictionary setObject:imageLink forKey:@"imageLink"];
-    [dictionary setObject:status forKey:@"statusMessage"];
+    if (displayName) {
+        [dictionary setObject:displayName forKey:@"displayName"];
+    }
+    if (imageLink) {
+        [dictionary setObject:imageLink forKey:@"imageLink"];
+    }
+    if (status) {
+        [dictionary setObject:status forKey:@"statusMessage"];
+    }
+    if (metadata) {
+        [dictionary setObject:metadata forKey:@"metadata"];
+    }
     
     NSError *error;
     NSData *postdata = [NSJSONSerialization dataWithJSONObject:dictionary options:0 error:&error];
@@ -414,6 +426,43 @@ typedef NS_ENUM(NSInteger, ApplozicUserClientError) {
         }
         completionHandler(theJson, theError);
         
+    }];
+}
+
+- (void)updateUser:(NSString *)phoneNumber email:(NSString *)email ofUser:(NSString *)userId withCompletion:(void (^)(id, NSError *))completion {
+    NSString * theUrlString = [NSString stringWithFormat:@"%@/rest/ws/user/update", KBASE_URL];
+    NSMutableDictionary *dictionary = [NSMutableDictionary new];
+    if (phoneNumber) {
+        [dictionary setObject:phoneNumber forKey:@"phoneNumber"];
+    }
+    if (email) {
+        [dictionary setObject:email forKey:@"email"];
+    }
+
+    NSError *error;
+    NSData *postdata = [NSJSONSerialization dataWithJSONObject:dictionary options:0 error:&error];
+    NSString *theParamString = [[NSString alloc] initWithData:postdata encoding: NSUTF8StringEncoding];
+
+    NSMutableURLRequest * theRequest = [ALRequestHandler
+                                        createPOSTRequestWithUrlString:theUrlString
+                                        paramString:theParamString
+                                        ofUserId:userId];
+
+    [ALResponseHandler processRequest:theRequest andTag:@"UPDATE_PHONE_AND_EMAIL" WithCompletionHandler:^(id theJson, NSError *theError) {
+        ALSLog(ALLoggerSeverityInfo, @"Update user phone/email :: %@",(NSString *)theJson);
+        ALAPIResponse *apiResponse = [[ALAPIResponse alloc] initWithJSONString:(NSString *)theJson];
+        if([apiResponse.status isEqualToString:@"error"])
+        {
+            NSError * reponseError =
+            [NSError errorWithDomain:@"Applozic"
+                                code:1
+                            userInfo: [NSDictionary
+                                       dictionaryWithObject:@"error updating user"
+                                       forKey:NSLocalizedDescriptionKey]];
+            completion(nil, reponseError);
+            return;
+        }
+        completion(apiResponse.response, theError);
     }];
 }
 

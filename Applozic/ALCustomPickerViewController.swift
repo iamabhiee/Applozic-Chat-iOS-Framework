@@ -230,6 +230,7 @@ public class ALBaseNavigationViewController: UINavigationController {
         let videos = Array(selectedVideos.values)
         
         videoCoder = ALVideoCoder()
+        
         let range = CMTimeRange(start: .zero, duration: CMTimeMakeWithSeconds(300, preferredTimescale: 600))
         videoCoder?.convert(phAssets: videos, range: range, baseVC: self) { urls in
             if let savedUrls = urls {
@@ -243,8 +244,10 @@ public class ALBaseNavigationViewController: UINavigationController {
         var images: [UIImage] = []
         for image in selectedImages.values {
             dispatchGroup.enter()
-            PHCachingImageManager.default().requestImageData(for: image, options:nil) { (imageData, _, _, _) in
-                if let imageData = imageData, let image = UIImage(data: imageData) {
+            let options = PHImageRequestOptions()
+            options.isSynchronous = true
+            PHCachingImageManager.default().requestImage(for: image, targetSize: CGSize(width: 1280, height: 720), contentMode: .aspectFill, options: options) { (image, _) in
+                if let image = image {
                     images.append(image)
                 }
                 dispatchGroup.leave()
@@ -271,7 +274,7 @@ public class ALBaseNavigationViewController: UINavigationController {
             if let list = self?.selectedMultimediaList(images: images, videos: videoPaths, gifs: gifsData) {
                 self?.delegate?.multimediaSelected(list)
             }
-            self?.navigationController?.presentingViewController?.dismiss(animated: false, completion: nil)
+            self?.dismiss(animated: false, completion: nil)
         }
     }
     @IBAction func dismissAction(_ sender: UIBarButtonItem) {

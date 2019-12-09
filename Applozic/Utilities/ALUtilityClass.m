@@ -19,6 +19,7 @@
 #import "ALContactDBService.h"
 #import "ALContact.h"
 #import "UIImageView+WebCache.h"
+#import "UIImage+animatedGIF.h"
 
 @implementation ALUtilityClass
 
@@ -151,18 +152,13 @@
     return result;
 }
 
-+ (NSString*) fileMIMEType:(NSString*) file {
++ (NSString*) fileMIMEType:(NSString*) filePath {
     NSString *mimeType = nil;
-    if([[NSFileManager defaultManager] fileExistsAtPath:file] && [file pathExtension]){
-        CFStringRef UTI = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, (__bridge CFStringRef)[file pathExtension], NULL);
-        CFStringRef MIMEType = UTTypeCopyPreferredTagWithClass (UTI, kUTTagClassMIMEType);
-        CFRelease(UTI);
-        if(MIMEType){
-            mimeType = [NSString stringWithString:(__bridge NSString *)(MIMEType)];
-            CFRelease(MIMEType);
-        }
+    if(filePath) {
+        NSString *fileExtension = [filePath pathExtension];
+        NSString *uti = (__bridge_transfer NSString *)UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, (__bridge CFStringRef)fileExtension, NULL);
+        mimeType = (__bridge_transfer NSString *)UTTypeCopyPreferredTagWithClass((__bridge CFStringRef)uti, kUTTagClassMIMEType);
     }
-    
     return mimeType;
 }
 
@@ -301,8 +297,8 @@
     [[TSMessageView appearance] setContentTextColor:[UIColor whiteColor]];
 
     [TSMessage showNotificationInViewController:top.topViewController
-                                          title:toastMessage
-                                       subtitle:nil
+                                          title:title
+                                       subtitle:toastMessage
                                           image:appIcon
                                            type:TSMessageNotificationTypeMessage
                                        duration:1.75
@@ -692,6 +688,88 @@
         urlForDocumentsDirectory = [urlForDocumentsDirectory URLByAppendingPathComponent:path];
     }
     return urlForDocumentsDirectory;
+}
+
++(UIImage *)getImageFromFilePath:(NSString *)filePath{
+
+    UIImage *image;
+    if (filePath != NULL)
+    {
+        NSURL *documentDirectory =  [self getApplicationDirectoryWithFilePath:filePath];
+        NSString *filePath = documentDirectory.path;
+        if([[NSFileManager defaultManager] fileExistsAtPath:filePath]){
+            image =  [self getImageFromNSURL:documentDirectory];
+        }else{
+            NSURL *appGroupDirectory =  [self getAppsGroupDirectoryWithFilePath:filePath];
+            if(appGroupDirectory){
+                image =   [self getImageFromNSURL:appGroupDirectory];
+            }
+        }
+    }
+    return image;
+
+}
+
++(UIImage*)getImageFromNSURL:(NSURL *)url{
+    UIImage *image;
+    NSString * pathExtenion = url.pathExtension;
+    if(pathExtenion != nil && [pathExtenion isEqualToString:@"gif"]){
+        image  = [UIImage animatedImageWithAnimatedGIFURL:url];
+    }else{
+        image =   [[UIImage alloc] initWithContentsOfFile:url.path];
+    }
+    return image;
+}
+
++ (NSData *)compressImage:(NSData *) data {
+    float compressRatio;
+    switch (data.length) {
+        case 0 ...  10 * 1024 * 1024:
+            return data;
+        case (10 * 1024 * 1024 + 1) ... 50 * 1024 * 1024:
+            compressRatio = 0.5; //50%
+            break;
+        default:
+            compressRatio = 0.1; //10%;
+    }
+    UIImage *image = [[UIImage alloc] initWithData: data];
+    float actualHeight = image.size.height;
+    float actualWidth = image.size.width;
+    float maxHeight = 300.0;
+    float maxWidth = 400.0;
+    float imgRatio = actualWidth / actualHeight;
+    float maxRatio = maxWidth / maxHeight;
+
+    if (actualHeight > maxHeight || actualWidth > maxWidth)
+    {
+        if(imgRatio < maxRatio)
+        {
+            //adjust width according to maxHeight
+            imgRatio = maxHeight / actualHeight;
+            actualWidth = imgRatio * actualWidth;
+            actualHeight = maxHeight;
+        }
+        else if(imgRatio > maxRatio)
+        {
+            //adjust height according to maxWidth
+            imgRatio = maxWidth / actualWidth;
+            actualHeight = imgRatio * actualHeight;
+            actualWidth = maxWidth;
+        }
+        else
+        {
+            actualHeight = maxHeight;
+            actualWidth = maxWidth;
+        }
+    }
+
+    CGRect rect = CGRectMake(0.0, 0.0, actualWidth, actualHeight);
+    UIGraphicsBeginImageContext(rect.size);
+    [image drawInRect:rect];
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    NSData *imageData = UIImageJPEGRepresentation(img, compressRatio);
+    UIGraphicsEndImageContext();
+    return imageData;
 }
 
 @end
