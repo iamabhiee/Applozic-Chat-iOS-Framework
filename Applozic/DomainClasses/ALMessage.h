@@ -30,7 +30,7 @@
 #define AL_MESSAGE_REPLY_KEY @"AL_REPLY"
 #define OUT_BOX @"5"
 #define IN_BOX  @"4"
-#define GROUP_APP_ID @"group.io.nineapp.ios"
+#define GROUP_APP_ID @"com.omgiva.ios"
 
 typedef enum {
     AL_NOT_A_REPLY,
