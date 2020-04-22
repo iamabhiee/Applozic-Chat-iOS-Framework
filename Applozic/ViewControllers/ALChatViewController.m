@@ -75,10 +75,10 @@
 #import "ALUploadTask.h"
 #import "ALDownloadTask.h"
 #import "ALMyContactMessageCell.h"
+#import "ALNotificationHelper.h"
 
-#define MQTT_MAX_RETRY 3
-#define NEW_MESSAGE_NOTIFICATION @"newMessageNotification"
-
+static int const MQTT_MAX_RETRY = 3;
+static CGFloat const TEXT_VIEW_TO_MESSAGE_VIEW_RATIO = 1.4;
 NSString * const ThirdPartyDetailVCNotification = @"ThirdPartyDetailVCNotification";
 NSString * const ThirdPartyDetailVCNotificationNavigationVC = @"ThirdPartyDetailVCNotificationNavigationVC";
 NSString * const ThirdPartyDetailVCNotificationALContact = @"ThirdPartyDetailVCNotificationALContact";
@@ -189,10 +189,8 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
 
     // Setup quick recording if it's enabled in the settings
     if([ALApplozicSettings isQuickAudioRecordingEnabled]) {
-        if (@available(iOS 9.0, *) && [ALApplozicSettings isNewAudioDesignEnabled]) {
+        if ([ALApplozicSettings isNewAudioDesignEnabled]) {
             isNewAudioDesignEnabled = YES;
-        } else {
-            isNewAudioDesignEnabled = NO;
         }
         [self setUpSoundRecordingView];
         [self showMicButton];
@@ -232,8 +230,8 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
 
     }];
     if(self.alMessage){
+        self.displayName = nil;
         [self handleMessageForward:self.alMessage];
-
     }
 }
 
@@ -315,8 +313,8 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(updateMessageSendStatus:)
                                                  name:@"UPDATE_MESSAGE_SEND_STATUS" object:nil];
 
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appEntersForeground:)
-                                                 name:@"APP_ENTER_IN_FOREGROUND" object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAppDidBecomeActive:)
+                                                 name:UIApplicationDidBecomeActiveNotification object:nil];
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(updateChannelName)
                                                  name:@"UPDATE_CHANNEL_NAME" object:nil];
@@ -325,7 +323,7 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
                                                       name:@"UPDATE_USER_FREEZE_CHANNEL_ADD_REMOVING" object:nil];
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(didEnterBackGround)
-                                                 name:@"APP_ENTER_IN_BACKGROUND" object:nil];
+                                                 name:UIApplicationDidEnterBackgroundNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(messageDeletedAPPLOZIC05Handler:)
                                                  name:@"NOTIFY_MESSAGE_DELETED" object:nil];
 
@@ -492,9 +490,10 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"USER_BLOCK_NOTIFICATION" object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"USER_UNBLOCK_NOTIFICATION" object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"UPDATE_MESSAGE_SEND_STATUS" object:nil];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:@"appCameInForeground" object:nil];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:@"APP_ENTER_IN_BACKGROUND" object:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidEnterBackgroundNotification object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"UPDATE_USER_FREEZE_CHANNEL_ADD_REMOVING" object:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidBecomeActiveNotification object:nil];
+
 
     [self.sendMessageTextView resignFirstResponder];
     [self.label setHidden:YES];
@@ -548,7 +547,7 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
     // save msg to db
     theMessage.msgDBObjectId = [self saveMessageToDatabase:theMessage];
 
-    [self sendMessage:theMessage ];
+    [self sendMessage:theMessage withUserDisplayName:self.displayName];
     [self.mTableView reloadData];
     [self setRefreshMainView:TRUE];
     [self scrollTableViewToBottomWithAnimation:YES];
@@ -700,7 +699,7 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
     }
 }
 
--(void)appEntersForeground:(id)notification
+-(void)onAppDidBecomeActive:(id)notification
 {
 // Updating Last Seen via Server Call
     [self serverCallForLastSeen];
@@ -1286,7 +1285,7 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
     //SEND MESSAGE
     [[self.alMessageWrapper getUpdatedMessageArray] addObject:message];
     [self showNoConversationLabel];
-    [self sendMessage:message];
+    [self sendMessage:message withUserDisplayName:nil];
     [self.mTableView reloadData];       //RELOAD MANUALLY SINCE NO NETWORK ERROR
     [self setRefreshMainView:TRUE];
     [self scrollTableViewToBottomWithAnimation:YES];
@@ -1309,6 +1308,8 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
     message.sentToServer = FALSE;
     message.status = @1;
 
+    self.displayName = nil;
+
     if(message.isAReplyMessage){
         message.metadata = nil;
     }
@@ -1325,8 +1326,7 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
     self.mTotalCount = self.mTotalCount+1;
     self.startIndex = self.startIndex + 1;
 
-    [self sendMessage:message messageAtIndex: [[self.alMessageWrapper getUpdatedMessageArray] count]];
-
+    [self sendMessage:message messageAtIndex: [[self.alMessageWrapper getUpdatedMessageArray] count] withUserDisplayName:nil];
 
     [self.mTableView reloadData];       //RELOAD MANUALLY SINCE NO NETWORK ERROR
     [self setRefreshMainView:TRUE];
@@ -1371,6 +1371,7 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
             [[ALMessageService sharedInstance] handleMessageFailedStatus:theMessage];
             return;
         }
+        [self updateUserDisplayNameWithMessage:theMessage withDisplayName:self.displayName];
         completion(message, error);
         [self.mTableView reloadData];
         [self setRefreshMainView:TRUE];
@@ -1387,7 +1388,7 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
     {
         ALMessage * locationMessage = [self formLocationMessage:latLongString];
         [[self.alMessageWrapper getUpdatedMessageArray] addObject:locationMessage];
-        [self sendMessage:locationMessage];
+        [self sendMessage:locationMessage withUserDisplayName:self.displayName];
         [self.mTableView reloadData];       //RELOAD MANUALLY SINCE NO NETWORK ERROR
         [self setRefreshMainView:TRUE];
         [self scrollTableViewToBottomWithAnimation:YES];
@@ -1576,7 +1577,7 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
     [self.sendMessageTextView setText:nil];
     self.mTotalCount = self.mTotalCount + 1;
     self.startIndex = self.startIndex + 1;
-    [self sendMessage:theMessage];
+    [self sendMessage:theMessage withUserDisplayName:self.displayName];
 
     if(isAudioRecordingEnabled) {
         [self showMicButton];
@@ -2344,7 +2345,7 @@ NSString * const ThirdPartyProfileTapNotification = @"ThirdPartyProfileTapNotifi
     theMessage.contentType = ALMESSAGE_CONTENT_DEFAULT;
     theMessage.groupId = self.channelKey;
     theMessage.conversationId  = self.conversationId;
-    theMessage.source = SOURCE_IOS;
+    theMessage.source = AL_SOURCE_IOS;
 //    theMessage.metadata = [self getNewMetaDataDictionary]; // EXAMPLE FOR META DATA
 
     if(self.messageReplyId){
@@ -3204,11 +3205,11 @@ style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
 }
 
 
--(void)sendMessage:(ALMessage *)theMessage{
-    [self sendMessage:theMessage messageAtIndex:0];
+-(void)sendMessage:(ALMessage *)theMessage withUserDisplayName:(NSString *) displayName {
+    [self sendMessage:theMessage messageAtIndex:0 withUserDisplayName:displayName];
 }
 
--(void)sendMessage:(ALMessage *)theMessage messageAtIndex:(NSUInteger) messageIndex{
+-(void)sendMessage:(ALMessage *)theMessage messageAtIndex:(NSUInteger) messageIndex withUserDisplayName:(NSString *) displayName {
     [self resetMessageReplyView];
     [[ALMessageService sharedInstance] sendMessages:theMessage withCompletion:^(NSString *message, NSError *error) {
 
@@ -3223,9 +3224,9 @@ style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
             [[self.alMessageWrapper getUpdatedMessageArray]replaceObjectAtIndex: messageIndex-1 withObject:theMessage];
 
         }
-
         [self.mTableView reloadData];
         [self setRefreshMainView:YES];
+        [self updateUserDisplayNameWithMessage:theMessage withDisplayName:displayName];
     }];
 }
 
@@ -3412,8 +3413,19 @@ style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
     {
         return;
     }
+
+
     ALNotificationView * alnotification = [[ALNotificationView alloc] initWithAlMessage:alMessage withAlertMessage:alertValue];
-    [alnotification nativeNotification:self];
+    [alnotification showNativeNotificationWithcompletionHandler:^(BOOL show) {
+
+        ALNotificationHelper * helper = [[ALNotificationHelper alloc]init];
+
+        if ([helper isApplozicViewControllerOnTop]) {
+
+            [helper handlerNotificationClick:alMessage.contactIds withGroupId:alMessage.groupId withConversationId:alMessage.conversationId notificationTapActionDisable:[ALApplozicSettings isInAppNotificationTapDisabled]];
+        }
+
+    }];
 }
 
 //===============================================================================================================================================
@@ -3470,6 +3482,51 @@ style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
     [self loadChatView];
     [self setCallButtonInNavigationBar];
     [self showNoConversationLabel];
+}
+
+-(void)refreshViewOnNotificationTap:(NSString *)userId withChannelKey:(NSNumber *)channelKey withConversationId:(NSNumber *)conversationId {
+
+    if (![self isChatOpenForSameConversationWithUserId:userId withGroupId:channelKey]) {
+        self.displayName = nil;
+    }
+
+    [self unSubscrbingChannel];
+    self.alChannel = nil;
+    self.alContact = nil;
+    self.contactIds = userId;
+    self.conversationId = conversationId;
+    self.channelKey = channelKey;
+    [self subscrbingChannel];
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+
+        [self.mTableView setUserInteractionEnabled:NO];
+        [[self.alMessageWrapper getUpdatedMessageArray] removeAllObjects];
+        [self.mTableView reloadData];
+        [self.mTableView setUserInteractionEnabled:YES];
+        [self setCallButtonInNavigationBar];
+        self.startIndex = 0;
+
+        NSString *chatId = self.channelKey != nil ? self.channelKey.stringValue : self.contactIds;
+
+        if ([ALUserDefaultsHandler isServerCallDoneForMSGList:chatId]) {
+            [self fetchMessageFromDB];
+            [self loadChatView];
+        } else {
+            [self showNoConversationLabel];
+            [self setTitle];
+            [self processLoadEarlierMessages:YES];
+        }
+        [self markConversationRead];;
+    });
+}
+
+-(BOOL)isChatOpenForSameConversationWithUserId:(NSString *) userId withGroupId:(NSNumber *) groupId{
+
+    return (self.channelKey != nil && groupId != nil &&
+            [groupId.stringValue isEqualToString:self.channelKey.stringValue]) ||
+    (self.channelKey == nil && self.contactIds != nil &&
+     userId != nil && [self.contactIds isEqualToString:userId]);
 }
 
 -(void)reloadViewfor3rdParty
@@ -4205,6 +4262,7 @@ style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
     {
         ALSLog(ALLoggerSeverityInfo, @"MQTT connection closed, subscribing again: %lu", (long)_mqttRetryCount);
         [self.mqttObject subscribeToConversation];
+        self.mqttObject.mqttConversationDelegate = self;
         [self subscrbingChannel];
         self.mqttRetryCount++;
     }
@@ -4461,7 +4519,7 @@ style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
 
     }else{
 
-        if([message.type isEqualToString:OUT_BOX]){
+        if([message.type isEqualToString:AL_OUT_BOX]){
             self.replyUserName.text = @"You";
         }else{
             ALContactDBService  *aLContactDBService = [ALContactDBService new];
@@ -4853,6 +4911,7 @@ style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
             [self.alMessageWrapper getUpdatedMessageArray][path.row] = alMessage;
             [self.mTableView reloadRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
           }
+        [self updateUserDisplayNameWithMessage:alMessage withDisplayName:self.displayName];
     }
 }
 
@@ -4862,6 +4921,21 @@ style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
     imageCell.mDowloadRetryButton.alpha = 1;
     imageCell.downloadRetryView.alpha = 1;
     imageCell.sizeLabel.alpha = 1;
+}
+
+-(void)updateUserDisplayNameWithMessage:(ALMessage *) message withDisplayName:(NSString *) displayName {
+    ALContactDBService * contactDBService = [[ALContactDBService alloc] init];
+
+    if (displayName.length && !message.groupId) {
+        ALContact * contact =  [contactDBService loadContactByKey:@"userId" value:message.to];
+        if (contact && [contact isDisplayNameUpdateRequired] ) {
+            [[ALUserService sharedInstance] updateDisplayNameWith:message.to withDisplayName:displayName withCompletion:^(ALAPIResponse *apiResponse, NSError *error) {
+                if (apiResponse &&  [apiResponse.status isEqualToString:AL_RESPONSE_SUCCESS]) {
+                    [contactDBService addOrUpdateMetadataWithUserId:message.to withMetadataKey:AL_DISPLAY_NAME_UPDATED withMetadataValue:@"true"];
+                }
+            }];
+        }
+    }
 }
 
 @end

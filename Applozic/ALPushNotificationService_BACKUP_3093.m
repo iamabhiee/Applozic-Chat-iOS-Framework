@@ -29,8 +29,17 @@
         return NO;
     }
     ALSLog(ALLoggerSeverityInfo, @"APNs GOT NEW MESSAGE & NOTIFICATION TYPE :: %@", type);
+//     NSLog(@"APNs GOT NEW MESSAGE & NOTIFICATION TYPE :: %@", type);
     BOOL prefixCheck = ([type hasPrefix:APPLOZIC_PREFIX]) || ([type hasPrefix:@"MT_"]);
+<<<<<<< HEAD
+//    NSLog(@"prefixCheck %d", prefixCheck);
+    BOOL status = (type != nil && ([ALPushNotificationService.ApplozicNotificationTypes containsObject:type] || prefixCheck));
+    
+//    NSLog(@"prefixCheck status %d", status);
+    return status;
+=======
     return (type != nil && ([self.notificationTypes.allValues containsObject:type] || prefixCheck));
+>>>>>>> master
 }
 
 -(BOOL) processPushNotification:(NSDictionary *)dictionary updateUI:(NSNumber *)updateUI
@@ -38,7 +47,8 @@
 
     ALSLog(ALLoggerSeverityInfo, @"APNS_DICTIONARY :: %@",dictionary.description);
     ALSLog(ALLoggerSeverityInfo, @"UPDATE UI VALUE :: %@",updateUI);
-    ALSLog(ALLoggerSeverityInfo, @"UPDATE UI :: %@", ([updateUI isEqualToNumber:[NSNumber numberWithInt:1]]) ? @"ACTIVE" : @"BACKGROUND/INACTIVE");
+    ALSLog(ALLoggerSeverityInfo, @"UPDATE UI AB:: %@", ([updateUI isEqualToNumber:[NSNumber numberWithInt:1]]) ? @"ACTIVE" : @"BACKGROUND/INACTIVE");
+    NSLog(@"UPDATE UI CD:: %@", ([updateUI isEqualToNumber:[NSNumber numberWithInt:1]]) ? @"ACTIVE" : @"BACKGROUND/INACTIVE");
 
     UIApplicationState state = [[UIApplication sharedApplication] applicationState];
 
@@ -100,6 +110,21 @@
 
         if ([type isEqualToString:self.notificationTypes[@(AL_SYNC)]]) // APPLOZIC_01 //
         {
+<<<<<<< HEAD
+            
+            [ALUserDefaultsHandler setMsgSyncRequired:YES];
+             NSLog(@"NEW MESSAGE -MAHIPAL %@",self.realTimeUpdate);
+            [ALMessageService getLatestMessageForUser:[ALUserDefaultsHandler getDeviceKeyString] withDelegate:self.realTimeUpdate
+                                       withCompletion:^(NSMutableArray *message, NSError *error) {
+                                           NSLog(@"NEW Array message-MAHIPAL %@",message);
+                                           
+                                       }];
+                      NSLog(@"ALPushNotificationService's SYNC CALL");
+             ALSLog(ALLoggerSeverityInfo, @"ALPushNotificationService's SYNC CALL");
+            [dict setObject:(alertValue ? alertValue : @"") forKey:@"alertValue"];
+
+            [self assitingNotificationMessage:notificationMsg andDictionary:dict withMetadata:metadataDictionary];
+=======
 
             ALSLog(ALLoggerSeverityInfo, @"ALPushNotificationService's SYNC CALL");
             [dict setObject:(alertValue ? alertValue : @"") forKey:@"alertValue"];
@@ -107,6 +132,7 @@
             if (state == UIApplicationStateActive) {
                 [ALMessageService getLatestMessageForUser:[ALUserDefaultsHandler getDeviceKeyString] withDelegate:self.realTimeUpdate
                                            withCompletion:^(NSMutableArray *message, NSError *error) {
+>>>>>>> master
 
                 }];
             }
