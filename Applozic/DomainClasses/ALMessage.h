@@ -32,7 +32,7 @@ static NSString *const AL_OUT_BOX = @"5";
 static NSString *const AL_IN_BOX = @"4";
 static NSString * const AL_RESET_UNREAD_COUNT = @"AL_RESET_UNREAD_COUNT";
 
-#define GROUP_APP_ID @"group.io.nineapp.ios"
+#define GROUP_APP_ID @"group.com.omgiva.ios"
 
 typedef enum {
     AL_NOT_A_REPLY,
