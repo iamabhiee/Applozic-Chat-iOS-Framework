@@ -24,7 +24,7 @@
 }
 
 +(NSUserDefaults *)getUserDefaults{
-    return [[NSUserDefaults alloc] initWithSuiteName:@"group.com.applozic.share"];
+    return [[NSUserDefaults alloc] initWithSuiteName:@"group.com.omgiva.ios"];
 }
 
 @end

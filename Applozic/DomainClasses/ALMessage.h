@@ -32,6 +32,8 @@ static NSString *const AL_OUT_BOX = @"5";
 static NSString *const AL_IN_BOX = @"4";
 static NSString * const AL_RESET_UNREAD_COUNT = @"AL_RESET_UNREAD_COUNT";
 
+#define GROUP_APP_ID @"group.io.nineapp.ios"
+
 typedef enum {
     AL_NOT_A_REPLY,
     AL_A_REPLY,
@@ -43,6 +45,7 @@ typedef enum {
 
 @property (nonatomic, copy) NSString * key;
 
+@property (nonatomic, copy) NSNumber * totalUnreadCount; //ADDED BY MAHIPAL SINGH ...
 
 @property (nonatomic, copy) NSString * deviceKey;
 

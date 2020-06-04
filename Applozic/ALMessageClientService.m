@@ -377,11 +377,13 @@
     NSString * theParamString;
     if(channelKey != nil)
     {
-        theParamString = [NSString stringWithFormat:@"groupId=%@",channelKey];
+        //theParamString = [NSString stringWithFormat:@"groupId=%@",channelKey];
+        theParamString = [NSString stringWithFormat:@"groupId=%@&resetCount=true",channelKey];
     }
     else
     {
-        theParamString = [NSString stringWithFormat:@"userId=%@",[contactId urlEncodeUsingNSUTF8StringEncoding]];
+        //theParamString = [NSString stringWithFormat:@"userId=%@",[contactId urlEncodeUsingNSUTF8StringEncoding]];
+        theParamString = [NSString stringWithFormat:@"userId=%@&resetCount=true",[contactId urlEncodeUsingNSUTF8StringEncoding]];
     }
     NSMutableURLRequest * theRequest = [ALRequestHandler createGETRequestWithUrlString:theUrlString paramString:theParamString];
     

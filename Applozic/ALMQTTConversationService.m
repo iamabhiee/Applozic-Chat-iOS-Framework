@@ -781,6 +781,10 @@ static NSString * const observeSupportGroupMessage = @"observeSupportGroupMessag
     [ALMessageService getLatestMessageForUser:[ALUserDefaultsHandler getDeviceKeyString] withDelegate:self.realTimeUpdate withCompletion:^(NSMutableArray *message, NSError *error) {
 
         ALSLog(ALLoggerSeverityInfo, @"ALMQTTConversationService SYNC CALL");
+        [self.alSyncCallService syncCall:alMessage];// added By Mahipal
+         [self.mqttConversationDelegate syncCall:alMessage andMessageList:nil];
+
+        /*
         if(!assistant.isOurViewOnTop)
         {
             [nsMutableDictionary setObject:@"mqtt" forKey:@"Calledfrom"];
@@ -791,7 +795,7 @@ static NSString * const observeSupportGroupMessage = @"observeSupportGroupMessag
             [self.alSyncCallService syncCall:alMessage];
             [self.mqttConversationDelegate syncCall:alMessage andMessageList:nil];
         }
-
+         */
     }];
 }
 
