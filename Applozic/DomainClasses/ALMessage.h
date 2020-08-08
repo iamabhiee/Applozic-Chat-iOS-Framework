@@ -120,7 +120,7 @@ typedef enum {
 
 -(NSString *)getCreatedAtTimeChat:(BOOL)today;
 -(NSNumber *)getGroupId;
--(NSString *)getNotificationText;
+-(NSString *)getLastMessage;
 -(NSMutableDictionary *)getMetaDataDictionary:(NSString *)string;
 -(NSString *)getVOIPMessageText;
 -(BOOL)isMsgHidden;
@@ -147,5 +147,6 @@ typedef enum {
 -(BOOL)isNotificationDisabled;
 -(BOOL)isLinkMessage;
 -(BOOL)isResetUnreadCountMessage;
+-(BOOL)hasAttachment;
 
 @end
