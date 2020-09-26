@@ -14,6 +14,9 @@
 #import "ALContactDBService.h"
 #import "ALUserDefaultsHandler.h"
 
+static NSString * const AL_DELETE_MESSAGE_FOR_KEY = @"AL_DELETE_GROUP_MESSAGE_FOR_ALL";
+static NSString * const AL_TRUE = @"true";
+
 @implementation ALMessage
 
 -(NSNumber *)getGroupId
@@ -292,7 +295,7 @@
     NSPropertyListFormat format;
     NSMutableDictionary * metaDataDictionary;
 
-    if (data) {
+    if (!data) {
         return nil;
     }
 
@@ -437,6 +440,12 @@
     }
 }
 
+-(BOOL)isDeletedForAll {
+    return self.metadata &&
+    [self.metadata valueForKey:AL_DELETE_MESSAGE_FOR_KEY] &&
+    [[self.metadata valueForKey:AL_DELETE_MESSAGE_FOR_KEY] isEqualToString:AL_TRUE];
+}
+
 - (instancetype)initWithBuilder:(ALMessageBuilder *)builder {
     if (self = [super init]) {
         _contactIds = builder.to;
@@ -524,6 +533,17 @@
             || (channel && [channel isNotificationMuted])
             
             || (contact && [contact isNotificationMuted]));
+}
+
+-(void)setAsDeletedForAll {
+    if (!self.metadata) {
+        self.metadata = [[NSMutableDictionary alloc] init];
+    }
+    [self.metadata setValue:AL_TRUE forKey:AL_DELETE_MESSAGE_FOR_KEY];
+}
+
+-(BOOL)isMessageSentToServer {
+    return self.status.intValue != 0;
 }
 
 @end

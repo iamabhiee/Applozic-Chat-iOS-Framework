@@ -50,8 +50,6 @@ extern NSString * const ThirdPartyDetailVCNotificationChannelKey;
 
 @property (nonatomic) BOOL isVisible;
 
-
-@property (nonatomic) BOOL refreshMainView;
 @property (nonatomic) BOOL refresh;
 @property (strong, nonatomic) NSString * displayName;
 
@@ -71,7 +69,7 @@ extern NSString * const ThirdPartyDetailVCNotificationChannelKey;
 -(void)individualNotificationhandler:(NSNotification *) notification;
 
 -(void)updateDeliveryStatus:(NSNotification *) notification;
--(void) setTitle;
+-(void) updateConversationProfileDetails;
 
 //-(void) syncCall:(NSString *) contactId updateUI:(NSNumber *) updateUI alertValue: (NSString *) alertValue;
 -(void) syncCall:(ALMessage *) alMessage andMessageList:(NSMutableArray*)messageArray;
@@ -96,7 +94,6 @@ extern NSString * const ThirdPartyDetailVCNotificationChannelKey;
 -(void)checkUserBlockStatus;
 -(void)updateChannelSubscribing:(NSNumber *)oldChannelKey andNewChannel:(NSNumber *)newChannelKey;
 -(void)subProcessDetailUpdate:(ALUserDetail *)userId;
--(void)addBroadcastMessageToDB:(ALMessage *)alMessage;
 
 -(void)subscrbingChannel;
 -(void)unSubscrbingChannel;
