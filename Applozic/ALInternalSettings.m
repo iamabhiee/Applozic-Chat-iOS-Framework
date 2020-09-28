@@ -24,7 +24,7 @@
 }
 
 +(NSUserDefaults *)getUserDefaults{
-    return [[NSUserDefaults alloc] initWithSuiteName:@"group.com.omgiva.ios"];
+    return [[NSUserDefaults alloc] initWithSuiteName:@"group.com.omgiva.iosapp"];
 }
 
 @end
