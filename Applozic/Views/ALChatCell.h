@@ -9,13 +9,10 @@
  **********************************************************************/
 
 #import <UIKit/UIKit.h>
-#import "ALMessage.h"
 #import "ALHyperLabel.h"
 #import "MessageReplyView.h"
-#import "ALApplozicSettings.h"
-#import "ALChannel.h"
-#import "ALContact.h"
 #import "ALTappableView.h"
+#import <ApplozicCore/ApplozicCore.h>
 
 @protocol ALChatCellDelegate <NSObject>
 
@@ -25,6 +22,7 @@
 -(void) showAnimation:(BOOL)flag;
 -(void) processALMessage:(ALMessage *) message;
 -(void) processForwardMessage:(ALMessage *) message;
+-(void)messageReport:(ALMessage *)alMessage;
 
 @optional
 

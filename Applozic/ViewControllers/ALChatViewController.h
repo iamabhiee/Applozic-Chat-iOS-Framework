@@ -6,26 +6,25 @@
 //
 #import "ALMapViewController.h"
 #import <UIKit/UIKit.h>
-#import "ALMessage.h"
 #import "ALBaseViewController.h"
 #import <CoreLocation/CoreLocation.h>
-#import "DB_CONTACT.h"
-#import "ALContact.h"
 #import "ALChatCell.h"
-#import "ALUserDetail.h"
-#import "ALMessageArrayWrapper.h"
-#import "ALChannelDBService.h"
-#import "ALChannel.h"
 #import "ALAudioCell.h"
 #import "ALAudioAttachmentViewController.h"
 #import "ALVCardClass.h"
 #import <ContactsUI/CNContactPickerViewController.h>
 #import "ALNewContactsViewController.h"
+#import <ApplozicCore/ApplozicCore.h>
 
 extern NSString * const ThirdPartyDetailVCNotification;
 extern NSString * const ThirdPartyDetailVCNotificationNavigationVC;
 extern NSString * const ThirdPartyDetailVCNotificationALContact;
 extern NSString * const ThirdPartyDetailVCNotificationChannelKey;
+extern NSString * const ThirdPartyProfileTapNotification;
+
+extern NSString * const ALAudioVideoCallForUserIdKey;
+extern NSString * const ALCallForAudioKey;
+extern NSString * const ALDidSelectStartCallOptionKey;
 
 @protocol ALChatViewControllerDelegate <NSObject>
 

@@ -7,8 +7,7 @@
 //
 
 #import "ALNotificationHelper.h"
-#import "ALApplozicSettings.h"
-#import <Applozic/Applozic-Swift.h>
+#import <ApplozicCore/ApplozicCore.h>
 #import <Applozic/ALSearchResultViewController.h>
 
 @implementation ALNotificationHelper
@@ -20,12 +19,15 @@
     return ([topViewControllerName hasPrefix:@"AL"]
             || [topViewControllerName hasPrefix:@"Applozic"]
             || [topViewControllerName isEqualToString:@"CNContactPickerViewController"]
-            || [topViewControllerName isEqualToString:@"CAMImagePickerCameraViewController"]);
+            || [topViewControllerName isEqualToString:@"CAMImagePickerCameraViewController"]
+            || [topViewControllerName isEqualToString:@"PHPickerViewController"]
+            || [alPushAssist isOurViewOnTop]);
 }
 
 -(void)handlerNotificationClick:(NSString *)contactId withGroupId:(NSNumber *)groupID withConversationId:(NSNumber *)conversationId notificationTapActionDisable:(BOOL)isTapActionDisabled {
 
-    if (isTapActionDisabled) {
+    ALPushAssist * alPushAssist = [[ALPushAssist alloc]init];
+    if (isTapActionDisabled || [alPushAssist isVOIPViewOnTop]) {
         ALSLog(ALLoggerSeverityInfo, @"Notification tap is disabled");
         return;
     }
@@ -35,11 +37,9 @@
         conversationId = nil;
     }
 
-    ALPushAssist * alPushAssist = [[ALPushAssist alloc]init];
-
     if ([alPushAssist.topViewController isKindOfClass:[ALMessagesViewController class]]
         || ([alPushAssist.topViewController isKindOfClass:[ALSearchResultViewController class]]
-        && [alPushAssist.topViewController presentingViewController])) {
+            && [alPushAssist.topViewController presentingViewController])) {
 
         [self openConversationViewFromListVC:contactId withGroupId:groupID withConversationId:conversationId];
 
@@ -48,6 +48,18 @@
         ALChatViewController * viewController = (ALChatViewController*)alPushAssist.topViewController;
         [viewController refreshViewOnNotificationTap:contactId withChannelKey:groupID withConversationId:conversationId];
 
+    } else if ([alPushAssist.topViewController isKindOfClass:[ALUserProfileVC class]]) {
+        ALChatLauncher *chatLauncher = [[ALChatLauncher alloc] initWithApplicationId:[ALUserDefaultsHandler getApplicationKey]];
+        [chatLauncher launchIndividualChat:contactId
+                               withGroupId:groupID
+                        withConversationId:conversationId andViewControllerObject:alPushAssist.topViewController
+                               andWithText:nil];
+    } else if ([alPushAssist.topViewController isKindOfClass:NSClassFromString([ALApplozicSettings getMsgContainerVC])]) {
+        ALChatLauncher *chatLauncher = [[ALChatLauncher alloc] initWithApplicationId:[ALUserDefaultsHandler getApplicationKey]];
+        [chatLauncher launchIndividualChat:contactId
+                               withGroupId:groupID
+                        withConversationId:conversationId andViewControllerObject:alPushAssist.topViewController
+                               andWithText:nil];
     } else {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self checkControllerAndDismissIfRequired:alPushAssist.topViewController withCompletion:^(BOOL handleClick) {
@@ -80,10 +92,11 @@
 
     if(![self isApplozicViewControllerOnTop]){
         completion(NO);
+        return;
     }
 
-    if ([[ALMessagesViewController class] isKindOfClass:NSClassFromString(@"ALMessagesViewController")]
-        || [[ALMessagesViewController class] isKindOfClass: NSClassFromString(@"ALChatViewController")]) {
+    if ([viewController isKindOfClass:[ALMessagesViewController class]]
+        || [viewController isKindOfClass: [ALChatViewController class]]) {
         completion(YES);
         return;
     }
@@ -93,8 +106,9 @@
         completion(YES);
         return;
     }
-    [viewController dismissViewControllerAnimated:NO completion:^ {
+    [viewController dismissViewControllerAnimated:YES completion:^ {
         completion(YES);
     }];
 }
+
 @end
